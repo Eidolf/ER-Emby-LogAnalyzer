@@ -6,6 +6,7 @@
   },
   "files": [
     "src/**/*",
+    "cli/**/*",
     "assets/**/*",
     "package.json"
   ],
