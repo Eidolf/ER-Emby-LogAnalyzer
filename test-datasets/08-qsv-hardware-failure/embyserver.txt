@@ -1,0 +1,4 @@
+2026-09-21 01:00:00.100 Info App: User Henry is playing 4kVideo.mkv on Emby Theater. PlayMethod=Transcode, SessionId=sess-qsv-08, PlaySessionId=playsess-qsv-8
+2026-09-21 01:00:00.200 Info App: ProcessRun 'ffmpeg-transcode' /usr/lib/emby-server/bin/ffmpeg -hwaccel vaapi -vaapi_device /dev/dri/renderD128 -i "/media/4kVideo.mkv" -c:v h264_vaapi "/var/lib/emby/transcoding-temp/transcode-qsv-08.m3u8"
+2026-09-21 01:00:00.800 Error App: FFmpeg process exited with code 1
+2026-09-21 01:00:00.810 Error App: VAAPI initialization error

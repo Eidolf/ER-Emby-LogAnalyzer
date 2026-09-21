@@ -1,0 +1,8 @@
+ffmpeg version 5.1.2-emby Copyright (c) 2000-2022 the FFmpeg developers
+Command: /usr/lib/emby-server/bin/ffmpeg -i "/media/tv/Show.mkv" -c:v libx264 "/var/lib/emby/transcoding-temp/transcode-perm-07.m3u8"
+Input #0, matroska,webm, from '/media/tv/Show.mkv':
+  Stream #0:0: Video: h264 (High), yuv420p, 1920x1080
+[hls @ 0x55bc20] Cannot open segment file /var/lib/emby/transcoding-temp/transcode-perm-07-0.ts: Permission denied
+av_interleaved_write_frame(): Permission denied
+Error writing trailer of /var/lib/emby/transcoding-temp/transcode-perm-07.m3u8: Permission denied
+ffmpeg exit code: 1

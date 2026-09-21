@@ -1,0 +1,5 @@
+2026-09-20 21:00:00.100 Info App: User Charlie is playing Matrix.mkv on Safari iOS. PlayMethod=Transcode, SessionId=sess-nvenc-crash-03, PlaySessionId=playsess-nvenc-3
+2026-09-20 21:00:00.200 Info App: ProcessRun 'ffmpeg-transcode' /usr/lib/emby-server/bin/ffmpeg -hwaccel cuda -i "/media/movies/Matrix.mkv" -c:v h264_nvenc "/var/lib/emby/transcoding-temp/transcode-nvenc-fail-03.m3u8"
+2026-09-20 21:00:02.100 Error App: FFmpeg process exited with code 1
+2026-09-20 21:00:02.110 Error App: Error in transcode pipeline. Retrying transcode...
+2026-09-20 21:00:02.300 Info SessionManager: Playback stopped reported by client: User Charlie, Item Matrix

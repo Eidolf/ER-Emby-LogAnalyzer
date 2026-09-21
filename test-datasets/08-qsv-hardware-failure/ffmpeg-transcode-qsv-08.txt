@@ -1,0 +1,7 @@
+ffmpeg version 5.1.2-emby Copyright (c) 2000-2022 the FFmpeg developers
+Command: /usr/lib/emby-server/bin/ffmpeg -hwaccel vaapi -vaapi_device /dev/dri/renderD128 -i "/media/4kVideo.mkv" -c:v h264_vaapi "/var/lib/emby/transcoding-temp/transcode-qsv-08.m3u8"
+[AVHWDeviceContext @ 0x55ca01] Failed to initialise VAAPI connection: -1 (unknown libva error).
+Device creation failed: -19.
+Failed to set value '/dev/dri/renderD128' for option 'vaapi_device': No such device
+Error parsing global options: No such device
+ffmpeg exit code: 1

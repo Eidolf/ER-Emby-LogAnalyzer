@@ -1,0 +1,12 @@
+ffmpeg version 5.1.2-emby Copyright (c) 2000-2022 the FFmpeg developers
+Command: /usr/lib/emby-server/bin/ffmpeg -i "/media/movies/Avatar.mkv" -c:v libx264 "/var/lib/emby/transcoding-temp/transcode-disk-05.m3u8"
+Input #0, matroska,webm, from '/media/movies/Avatar.mkv':
+  Stream #0:0: Video: h264 (High), yuv420p, 1920x1080
+Stream mapping:
+  Stream #0:0 -> #0:0 (h264 (native) -> h264 (libx264))
+frame=  210 fps= 45 q=28.0 size=    1024kB time=00:00:08.50 speed=1.8x
+[hls @ 0x55ef01] Cannot open segment file /var/lib/emby/transcoding-temp/transcode-disk-05-12.ts: No space left on device
+av_interleaved_write_frame(): No space left on device
+Error writing trailer of /var/lib/emby/transcoding-temp/transcode-disk-05.m3u8: No space left on device
+Conversion failed!
+ffmpeg exit code: 1

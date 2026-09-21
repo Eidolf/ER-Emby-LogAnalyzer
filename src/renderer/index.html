@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Emby Log Analyzer</title>
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="brand-section">
+      <img src="../../assets/logo.png" alt="Emby Log Analyzer Logo" class="app-logo">
+      <h1 class="app-title">Emby Log Analyzer</h1>
+      <span class="app-badge">v1.0.0</span>
+    </div>
+    <div class="header-actions">
+      <button id="btnExportHtml" class="btn" disabled>Export HTML</button>
+      <button id="btnExportMarkdown" class="btn" disabled>Export Markdown</button>
+      <button id="btnExportJson" class="btn" disabled>Export JSON</button>
+    </div>
+  </header>
+
+  <!-- Container -->
+  <div class="app-container">
+    <!-- Left Sidebar: File Ingestion & Sample Scenarios -->
+    <aside class="sidebar">
+      <div id="dropZone" class="drop-zone">
+        <div class="drop-icon">📂</div>
+        <h4>Drag & Drop Logs Here</h4>
+        <p>embyserver*.txt, ffmpeg-transcode-*.txt</p>
+        <button id="btnBrowseFiles" class="btn">Browse Files</button>
+      </div>
+
+      <div class="sample-selector">
+        <label for="sampleSelect">Quick Load Test Scenario</label>
+        <select id="sampleSelect">
+          <option value="" selected disabled>-- Select Test Scenario --</option>
+          <option value="01-direct-play-success">01 - Direct Play (Success)</option>
+          <option value="02-hardware-transcode-nvenc-success">02 - NVENC Hardware Transcode (Success)</option>
+          <option value="03-failed-transcode-nvenc-driver-crash">03 - NVENC Driver Crash (Error)</option>
+          <option value="04-network-client-disconnect">04 - Network Client Disconnect (Warning)</option>
+          <option value="05-storage-disk-full">05 - Storage Cache Disk Full (Critical)</option>
+          <option value="06-corrupted-media-container">06 - Corrupt Media Container (Error)</option>
+          <option value="07-permission-denied-transcode-temp">07 - Transcode Temp Permission Denied (Error)</option>
+          <option value="08-qsv-hardware-failure">08 - Intel QuickSync / VAAPI Failure (Error)</option>
+        </select>
+      </div>
+
+      <div class="file-list-container">
+        <div class="file-list-header">
+          <span>Staged Log Files</span>
+          <span id="fileCountBadge">0</span>
+        </div>
+        <ul id="fileList" class="file-list"></ul>
+      </div>
+
+      <button id="btnAnalyze" class="btn btn-primary" style="width: 100%; justify-content: center;" disabled>
+        Analyze Logs
+      </button>
+    </aside>
+
+    <!-- Main Content: Diagnostics, Metrics, Sessions, and Timelines -->
+    <main class="main-content" id="mainContent">
+      <!-- Empty Initial State -->
+      <div id="emptyState" class="empty-state">
+        <div class="empty-state-icon">📊</div>
+        <h2>Ready for Log Analysis</h2>
+        <p>Select or drag & drop Emby Server and FFmpeg transcode logs to diagnose playback, transcoding, and streaming issues.</p>
+      </div>
+
+      <!-- Analysis Results Dashboard (Hidden until analyzed) -->
+      <div id="resultsDashboard" style="display: none; display: flex; flex-direction: column; gap: 20px;">
+        <!-- Metrics -->
+        <div class="metrics-row">
+          <div class="metric-card">
+            <span class="metric-title">Fleet Health</span>
+            <span class="metric-val" id="metricHealth" style="color: var(--status-success)">-</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-title">Total Sessions</span>
+            <span class="metric-val" id="metricTotal">0</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-title">Successful</span>
+            <span class="metric-val" id="metricSuccess" style="color: var(--status-success)">0</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-title">Warnings</span>
+            <span class="metric-val" id="metricWarning" style="color: var(--status-warning)">0</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-title">Errors / Crashes</span>
+            <span class="metric-val" id="metricError" style="color: var(--status-error)">0</span>
+          </div>
+        </div>
+
+        <!-- AI Briefing -->
+        <div class="briefing-card">
+          <div class="briefing-header">
+            <span>✨ Privacy-First Local AI Diagnostic Briefing</span>
+          </div>
+          <div class="briefing-body" id="aiBriefingText">Analyzing...</div>
+        </div>
+
+        <!-- Sessions Section -->
+        <div class="sessions-section">
+          <div class="sessions-filter-bar">
+            <h3>Correlated Playback Sessions</h3>
+            <div class="session-filter-buttons">
+              <button class="filter-btn active" data-filter="all">All</button>
+              <button class="filter-btn" data-filter="error">Errors</button>
+              <button class="filter-btn" data-filter="warning">Warnings</button>
+              <button class="filter-btn" data-filter="success">Success</button>
+            </div>
+          </div>
+
+          <div id="sessionsList" class="sessions-list"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

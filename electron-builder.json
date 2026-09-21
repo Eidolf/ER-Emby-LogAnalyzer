@@ -1,0 +1,28 @@
+{
+  "appId": "de.eidolf.emby-loganalyzer",
+  "productName": "Emby Log Analyzer",
+  "directories": {
+    "output": "dist"
+  },
+  "files": [
+    "src/**/*",
+    "assets/**/*",
+    "package.json"
+  ],
+  "linux": {
+    "target": [
+      "AppImage",
+      "deb",
+      "tar.gz"
+    ],
+    "category": "Utility",
+    "icon": "assets/logo.png"
+  },
+  "win": {
+    "target": [
+      "portable",
+      "nsis"
+    ],
+    "icon": "assets/logo.png"
+  }
+}

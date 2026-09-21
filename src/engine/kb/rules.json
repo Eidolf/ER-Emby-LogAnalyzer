@@ -1,0 +1,196 @@
+[
+  {
+    "id": "NVENC_INIT_FAIL",
+    "category": "Hardware Acceleration",
+    "patterns": [
+      "Cannot load nvcuda.dll",
+      "Failed to create Nvenc instance",
+      "InitializeEncoder failed",
+      "nvenc.*error",
+      "No NVENC capable devices found",
+      "Driver does not support the required nvenc API version"
+    ],
+    "target": "all",
+    "title": "NVIDIA NVENC Hardware Acceleration Failure",
+    "rootCause": "The NVIDIA NVENC hardware encoder failed to initialize or crashed during transcoding.",
+    "severity": "Error",
+    "confidence": 95,
+    "explanation": "FFmpeg attempted to initialize NVIDIA hardware video encoding, but the GPU driver either crashed, lacks supported CUDA/NVENC API capabilities, or was rejected by the system driver runtime.",
+    "recommendations": [
+      "Update NVIDIA display and CUDA drivers on the host server to the latest production branch.",
+      "If running inside a Docker/LXC container, verify NVIDIA container toolkit pass-through (`--gpus all` or `/dev/dri`, `/dev/nvidia*`).",
+      "Temporarily toggle hardware acceleration to 'Advanced' or fallback to Software (libx264) in Emby Server Dashboard -> Transcoding.",
+      "Check `nvidia-smi` to ensure the GPU is not out of memory or locked by another process."
+    ]
+  },
+  {
+    "id": "QSV_VAAPI_INIT_FAIL",
+    "category": "Hardware Acceleration",
+    "patterns": [
+      "Error initializing an MFX session",
+      "Failed to initialise VAAPI connection",
+      "vaInitialize failed",
+      "Device creation failed: -19",
+      "qsv.*error.*failed",
+      "mfx.*failed"
+    ],
+    "target": "all",
+    "title": "Intel QuickSync / VAAPI Driver Error",
+    "rootCause": "Intel Quick Sync Video (QSV) or Linux VAAPI hardware acceleration failed to open the render node.",
+    "severity": "Error",
+    "confidence": 92,
+    "explanation": "FFmpeg could not access `/dev/dri/renderD128` or communicate with the Intel media driver. Emby was forced to abort or fall back to software transcoding.",
+    "recommendations": [
+      "Ensure the Emby user has access permissions to the video group: `sudo usermod -aG render,video emby`.",
+      "Install latest `intel-media-va-driver-non-free` (or equivalent QSV packages on your distribution).",
+      "Verify hardware transcoding device path in Emby Transcoding settings."
+    ]
+  },
+  {
+    "id": "STORAGE_DISK_FULL",
+    "category": "Storage",
+    "patterns": [
+      "No space left on device",
+      "There is not enough space on the disk",
+      "Disk full",
+      "Failed to write chunk.*space",
+      "Error writing trailer.*No space"
+    ],
+    "target": "all",
+    "title": "Transcoding Storage Full / No Disk Space",
+    "rootCause": "The Emby transcoding temporary cache partition has run out of available storage capacity.",
+    "severity": "Critical",
+    "confidence": 98,
+    "explanation": "During video transcoding, FFmpeg writes continuous HLS segments (`.ts` or `.m4s`) into the cache path. The partition reached 100% disk usage, causing FFmpeg write operations to abort abruptly.",
+    "recommendations": [
+      "Free disk space on the partition hosting Emby's transcode directory.",
+      "Change the transcoding temporary path in Emby Dashboard -> Transcoding to a drive with larger capacity or a high-speed SSD.",
+      "Configure Emby's 'Transcoding temporary path' retention or clean up stale temp folders."
+    ]
+  },
+  {
+    "id": "PERMISSION_DENIED_STORAGE",
+    "category": "Permissions",
+    "patterns": [
+      "Permission denied",
+      "Access is denied",
+      "EACCES",
+      "Cannot open file.*permission"
+    ],
+    "target": "all",
+    "title": "File System Permission Denied",
+    "rootCause": "Emby or the spawned FFmpeg worker lacks read permissions for the media file or write permissions for the transcode cache directory.",
+    "severity": "Error",
+    "confidence": 94,
+    "explanation": "The operating system rejected file system access. Either the media library storage permissions prevent the Emby service user from reading media chunks, or the transcode cache folder is read-only.",
+    "recommendations": [
+      "Verify file ownership and POSIX/ACL permissions on the media and transcoding folders (e.g. `chown -R emby:emby /var/lib/emby/transcoding-temp`).",
+      "On Windows, ensure the user account running the Emby Server service has Full Control on the transcode cache directory."
+    ]
+  },
+  {
+    "id": "NETWORK_CLIENT_DISCONNECT",
+    "category": "Network",
+    "patterns": [
+      "Connection reset by peer",
+      "An existing connection was forcibly closed by the remote host",
+      "client disconnected after",
+      "Client disconnected unexpectedly",
+      "Broken pipe",
+      "EndOfStream reached with error -10054"
+    ],
+    "target": "all",
+    "title": "Client Disconnected / Network Connection Dropped",
+    "rootCause": "The remote media playback client closed the connection or experienced network interruption.",
+    "severity": "Warning",
+    "confidence": 90,
+    "explanation": "The playback stream was severed from the client end. This commonly happens when a user pauses and exits the app, closes the browser tab, experiences Wi-Fi packet dropouts, or an intermediate reverse proxy (e.g., Nginx, Cloudflare) times out.",
+    "recommendations": [
+      "Check if the user intentionally stopped playback.",
+      "Inspect client Wi-Fi/cellular connection stability.",
+      "If behind Nginx or Cloudflare, ensure proxy timeouts (`proxy_read_timeout`, `proxy_send_timeout`) are set high enough (e.g. 600s) and buffering is disabled for streaming endpoints."
+    ]
+  },
+  {
+    "id": "CONTAINER_CORRUPT_MEDIA",
+    "category": "Codec & Media",
+    "patterns": [
+      "Invalid data found when processing input",
+      "moov atom not found",
+      "EBML header parsing failed",
+      "corrupt decoded frame",
+      "Error splitting the input into NAL units",
+      "Missing keyframe"
+    ],
+    "target": "all",
+    "title": "Corrupt Container or Damaged Media Bitstream",
+    "rootCause": "The source media file contains corrupted headers or invalid video/audio bitstream data.",
+    "severity": "Error",
+    "confidence": 96,
+    "explanation": "FFmpeg encountered an unrecoverable bitstream error while demuxing the media container (MKV/MP4). The file may have been downloaded incompletely or suffered storage sector corruption.",
+    "recommendations": [
+      "Re-mux or re-encode the file using MKVToolNix or Handbrake.",
+      "Verify the integrity of the file: `ffmpeg -v error -i \"filename.mkv\" -f null -`.",
+      "Check the source storage drive for bad sectors or bit rot."
+    ]
+  },
+  {
+    "id": "SUBTITLE_BURNIN_FAILURE",
+    "category": "Subtitles",
+    "patterns": [
+      "Error initializing filter 'subtitles'",
+      "Fontconfig error",
+      "Cannot load font",
+      "Error processing filtergraph: Invalid argument"
+    ],
+    "target": "ffmpeg",
+    "title": "Subtitle Burn-In / Filtergraph Failure",
+    "rootCause": "FFmpeg failed while rendering or burning graphical (PGS) or complex ASS/SSA subtitles into the video stream.",
+    "severity": "Error",
+    "confidence": 91,
+    "explanation": "Rendering complex subtitles requires font rasterization via libass/fontconfig. Missing system fonts or malformed subtitle streams caused FFmpeg filter initialization to fail.",
+    "recommendations": [
+      "Switch subtitle playback to text format (SRT) or extract subtitles externally.",
+      "Enable 'Allow subtitle extraction on the fly' in Emby Server.",
+      "Install required fonts (`fonts-dejavu-core`, `fontconfig`) on Linux hosts."
+    ]
+  },
+  {
+    "id": "CODEC_UNSUPPORTED",
+    "category": "Codec & Media",
+    "patterns": [
+      "Unknown decoder",
+      "Unknown encoder",
+      "Codec .* not supported",
+      "Specified pixel format .* is not supported"
+    ],
+    "target": "ffmpeg",
+    "title": "Unsupported Codec or Pixel Format",
+    "rootCause": "The media utilizes an audio or video codec or pixel format unsupported by the active FFmpeg build.",
+    "severity": "Error",
+    "confidence": 93,
+    "explanation": "FFmpeg cannot locate a compatible decoder or encoder for this stream.",
+    "recommendations": [
+      "Update Emby Server to ensure the bundled FFmpeg binary includes modern codec libraries.",
+      "Convert the source file to standard H.264/H.265 with AAC audio."
+    ]
+  },
+  {
+    "id": "SESSION_TIMEOUT_INACTIVE",
+    "category": "Session",
+    "patterns": [
+      "Session .* timed out due to inactivity",
+      "Idle timeout reached",
+      "Playback stopped due to inactivity"
+    ],
+    "target": "emby",
+    "title": "Playback Session Inactivity Timeout",
+    "rootCause": "The playback session was terminated by Emby because no keep-alive or progress pings were received from the client.",
+    "severity": "Warning",
+    "confidence": 88,
+    "explanation": "Emby automatically reaps inactive sessions when clients suspend playback or sleep without actively notifying the server.",
+    "recommendations": [
+      "This is expected normal behavior if the user paused media and walked away."
+    ]
+  }
+]

@@ -1,0 +1,14 @@
+ffmpeg version 5.1.2-emby Copyright (c) 2000-2022 the FFmpeg developers
+Command: /usr/lib/emby-server/bin/ffmpeg -hwaccel cuda -i "/media/movies/Gladiator.mkv" -c:v h264_nvenc -c:a aac "/var/lib/emby/transcoding-temp/transcode-job-nvenc-02.m3u8"
+Input #0, matroska,webm, from '/media/movies/Gladiator.mkv':
+  Stream #0:0: Video: h264 (High), yuv420p, 1920x1080 [SAR 1:1 DAR 16:9], 23.98 fps
+  Stream #0:1: Audio: dts (DTS), 48000 Hz, 5.1(side), fltp, 1536 kb/s
+Stream mapping:
+  Stream #0:0 -> #0:0 (h264 (native) -> h264 (h264_nvenc))
+  Stream #0:1 -> #0:1 (dts (dca) -> aac (native))
+[h264_nvenc @ 0x55d7f1] Loaded Nvenc library successfully.
+frame=  250 fps=115 q=21.0 size=    1536kB time=00:00:10.41 bitrate=1208.5kbits/s speed=4.8x
+frame= 1200 fps=120 q=22.0 size=    8192kB time=00:00:50.00 bitrate=1342.1kbits/s speed=5.0x
+[q] command received. Exiting.
+video:28410kB audio:3104kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: unknown
+ffmpeg exit code: 0

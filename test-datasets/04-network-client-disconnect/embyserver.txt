@@ -1,0 +1,4 @@
+2026-09-20 22:00:00.100 Info App: User Dave is playing Interstellar.mkv on FireStick. PlayMethod=DirectStream, SessionId=sess-net-04, PlaySessionId=playsess-net-4
+2026-09-20 22:07:22.400 Info HttpServer: HTTP GET http://emby.local/Videos/456/stream.mp4 - Connection reset by peer
+2026-09-20 22:07:22.410 Warn SessionManager: Playback stopped because the client disconnected after 7 minutes and 22 seconds.
+2026-09-20 22:07:22.420 Info SessionManager: Session sess-net-04 has ended

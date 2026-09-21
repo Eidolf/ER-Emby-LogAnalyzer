@@ -1,0 +1,12 @@
+ffmpeg version 5.1.2-emby Copyright (c) 2000-2022 the FFmpeg developers
+Command: /usr/lib/emby-server/bin/ffmpeg -hwaccel cuda -i "/media/movies/Matrix.mkv" -c:v h264_nvenc "/var/lib/emby/transcoding-temp/transcode-nvenc-fail-03.m3u8"
+Input #0, matroska,webm, from '/media/movies/Matrix.mkv':
+  Stream #0:0: Video: hevc (Main 10), yuv420p10le, 3840x2160, 24 fps
+Stream mapping:
+  Stream #0:0 -> #0:0 (hevc (native) -> h264 (h264_nvenc))
+[h264_nvenc @ 0x55d7f1] Cannot load nvcuda.dll
+[h264_nvenc @ 0x55d7f1] Failed to create Nvenc instance: Driver does not support the required nvenc API version
+[h264_nvenc @ 0x55d7f1] InitializeEncoder failed: 0x8007000e
+Error initializing output stream 0:0 -- Error while opening encoder for output stream #0:0 - maybe incorrect parameters such as bit_rate, rate, width or height
+Conversion failed!
+ffmpeg exit code: 1

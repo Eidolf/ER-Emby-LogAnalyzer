@@ -1,0 +1,5 @@
+2026-09-20 19:00:00.100 Info App: User Alice is playing Inception.mkv on LG WebOS. PlayMethod=DirectPlay, SessionId=directplay-session-01, PlaySessionId=playsess-dp-1
+2026-09-20 19:00:00.120 Info Server: http/1.1 Response 200 to 192.168.1.50. Time: 20ms. GET http://emby.local/Items/123/PlaybackInfo
+2026-09-20 19:00:01.000 Info SessionManager: Playback start reported: User Alice, Item Inception, PlaySessionId: playsess-dp-1
+2026-09-20 19:45:10.500 Info SessionManager: Playback stopped reported by client: User Alice, Item Inception, Position: 2710s
+2026-09-20 19:45:10.510 Info SessionManager: Session directplay-session-01 has ended

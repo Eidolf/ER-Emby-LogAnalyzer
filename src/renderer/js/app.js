@@ -1,0 +1,296 @@
+// Client-side Application Logic for Emby Log Analyzer Desktop
+let stagedFiles = [];
+let currentAnalysis = null;
+let currentFilter = 'all';
+
+// DOM Elements
+const dropZone = document.getElementById('dropZone');
+const btnBrowseFiles = document.getElementById('btnBrowseFiles');
+const btnAnalyze = document.getElementById('btnAnalyze');
+const sampleSelect = document.getElementById('sampleSelect');
+const fileList = document.getElementById('fileList');
+const fileCountBadge = document.getElementById('fileCountBadge');
+const emptyState = document.getElementById('emptyState');
+const resultsDashboard = document.getElementById('resultsDashboard');
+
+const metricHealth = document.getElementById('metricHealth');
+const metricTotal = document.getElementById('metricTotal');
+const metricSuccess = document.getElementById('metricSuccess');
+const metricWarning = document.getElementById('metricWarning');
+const metricError = document.getElementById('metricError');
+const aiBriefingText = document.getElementById('aiBriefingText');
+const sessionsList = document.getElementById('sessionsList');
+
+const btnExportHtml = document.getElementById('btnExportHtml');
+const btnExportMarkdown = document.getElementById('btnExportMarkdown');
+const btnExportJson = document.getElementById('btnExportJson');
+
+// File Selection & Drag-and-Drop
+btnBrowseFiles.addEventListener('click', async () => {
+  if (window.electronAPI) {
+    const res = await window.electronAPI.openFiles();
+    if (!res.canceled && res.filePaths) {
+      addFiles(res.filePaths);
+    }
+  }
+});
+
+dropZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dropZone.classList.add('drag-over');
+});
+
+dropZone.addEventListener('dragleave', () => {
+  dropZone.classList.remove('drag-over');
+});
+
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files) {
+    const paths = Array.from(e.dataTransfer.files).map(f => f.path).filter(Boolean);
+    if (paths.length > 0) {
+      addFiles(paths);
+    }
+  }
+});
+
+// Sample Selector
+sampleSelect.addEventListener('change', async (e) => {
+  const val = e.target.value;
+  if (!val) return;
+  if (window.electronAPI) {
+    const res = await window.electronAPI.loadSample(val);
+    if (res.success && res.files) {
+      stagedFiles = [];
+      addFiles(res.files);
+    }
+  }
+});
+
+function addFiles(paths) {
+  for (const p of paths) {
+    if (!stagedFiles.includes(p)) {
+      stagedFiles.push(p);
+    }
+  }
+  renderFileList();
+}
+
+function removeFile(index) {
+  stagedFiles.splice(index, 1);
+  renderFileList();
+}
+
+function renderFileList() {
+  fileList.innerHTML = '';
+  fileCountBadge.textContent = stagedFiles.length;
+
+  stagedFiles.forEach((f, idx) => {
+    const li = document.createElement('li');
+    li.className = 'file-item';
+    const name = f.split('/').pop().split('\\').pop();
+    li.innerHTML = `
+      <span class="file-item-name" title="${f}">${escapeHtml(name)}</span>
+      <button class="file-item-remove" onclick="removeFile(${idx})">✕</button>
+    `;
+    fileList.appendChild(li);
+  });
+
+  btnAnalyze.disabled = stagedFiles.length === 0;
+}
+
+// Analysis Execution
+btnAnalyze.addEventListener('click', async () => {
+  if (stagedFiles.length === 0) return;
+  btnAnalyze.disabled = true;
+  btnAnalyze.textContent = 'Analyzing...';
+
+  try {
+    const res = await window.electronAPI.runAnalysis(stagedFiles);
+    if (res.success) {
+      currentAnalysis = res.data;
+      displayResults(res.data);
+    } else {
+      alert(`Analysis failed: ${res.error}`);
+    }
+  } catch (err) {
+    console.error('Error during analysis:', err);
+    alert('Failed to analyze selected files.');
+  } finally {
+    btnAnalyze.disabled = false;
+    btnAnalyze.textContent = 'Analyze Logs';
+  }
+});
+
+function displayResults(data) {
+  emptyState.style.display = 'none';
+  resultsDashboard.style.display = 'flex';
+
+  // Metrics
+  metricHealth.textContent = data.overallHealth;
+  if (data.overallHealth === 'Healthy' || data.overallHealth === 'Success') {
+    metricHealth.style.color = 'var(--status-success)';
+  } else if (data.overallHealth === 'Warning') {
+    metricHealth.style.color = 'var(--status-warning)';
+  } else {
+    metricHealth.style.color = 'var(--status-error)';
+  }
+
+  metricTotal.textContent = data.metrics.totalSessions;
+  metricSuccess.textContent = data.metrics.successCount;
+  metricWarning.textContent = data.metrics.warningCount;
+  metricError.textContent = data.metrics.errorCount + data.metrics.criticalCount;
+
+  // AI Briefing
+  aiBriefingText.innerHTML = formatMarkdown(data.briefing);
+
+  // Export buttons
+  btnExportHtml.disabled = false;
+  btnExportMarkdown.disabled = false;
+  btnExportJson.disabled = false;
+
+  renderSessions();
+}
+
+// Session Filtering
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentFilter = btn.dataset.filter;
+    renderSessions();
+  });
+});
+
+function renderSessions() {
+  if (!currentAnalysis) return;
+  sessionsList.innerHTML = '';
+
+  const filtered = currentAnalysis.sessions.filter(s => {
+    if (currentFilter === 'all') return true;
+    if (currentFilter === 'error') return s.overallStatus === 'Error' || s.overallStatus === 'Critical';
+    if (currentFilter === 'warning') return s.overallStatus === 'Warning';
+    if (currentFilter === 'success') return s.overallStatus === 'Success';
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    sessionsList.innerHTML = `<div style="color: var(--text-muted); font-size: 0.85rem; padding: 20px;">No sessions match filter "${currentFilter}".</div>`;
+    return;
+  }
+
+  for (const s of filtered) {
+    const card = document.createElement('div');
+    card.className = 'session-card';
+
+    let badgeClass = 'badge-success';
+    if (s.overallStatus === 'Warning') badgeClass = 'badge-warning';
+    else if (s.overallStatus === 'Error') badgeClass = 'badge-error';
+    else if (s.overallStatus === 'Critical') badgeClass = 'badge-critical';
+
+    const root = s.primaryRootCause;
+
+    let rcaContent = '';
+    if (root) {
+      const evList = (root.evidence || []).map(e => `<li>${escapeHtml(e)}</li>`).join('');
+      const recList = (root.recommendations || []).map(r => `<li>${escapeHtml(r)}</li>`).join('');
+
+      rcaContent = `
+        <div class="rca-box">
+          <div class="rca-title-row">
+            <span class="rca-title">${escapeHtml(root.title)}</span>
+            <span class="confidence-gauge">${root.confidence}% Confidence</span>
+          </div>
+          <div class="rca-cause">${escapeHtml(root.cause)}</div>
+          <p style="font-size:0.85rem; color: #cbd5e1; margin-bottom: 8px;">${escapeHtml(root.explanation)}</p>
+          ${root.evidence && root.evidence.length > 0 ? `<strong>Evidence:</strong><ul class="evidence-list">${evList}</ul>` : ''}
+          ${root.recommendations && root.recommendations.length > 0 ? `<strong style="margin-top:6px; display:inline-block;">Actionable Remediation:</strong><ul class="recs-list">${recList}</ul>` : ''}
+        </div>
+      `;
+    }
+
+    // Timeline elements
+    let timelineRows = '';
+    if (s.timeline && s.timeline.length > 0) {
+      timelineRows = s.timeline.map(ev => `
+        <div class="timeline-item ${ev.level.toLowerCase()}">
+          <span class="timeline-ts">${escapeHtml(ev.timestamp || '-')}</span>
+          <span class="timeline-source">${escapeHtml(ev.source)}</span>
+          <span class="timeline-detail">${escapeHtml(ev.details)}</span>
+        </div>
+      `).join('');
+    }
+
+    card.innerHTML = `
+      <div class="session-header">
+        <div class="session-title-group">
+          <h3>${escapeHtml(s.mediaItem || 'Unknown Media')}</h3>
+          <div class="session-meta-info">
+            <span>User: <strong>${escapeHtml(s.user || 'Unknown')}</strong></span>
+            <span>Device: <strong>${escapeHtml(s.clientDevice || 'Unknown')}</strong></span>
+            <span>Method: <strong>${escapeHtml(s.playMethod)}</strong></span>
+            <span>Correlated FFmpeg Logs: <strong>${s.ffmpegTranscodeLogsCount}</strong></span>
+          </div>
+        </div>
+        <span class="status-badge ${badgeClass}">${s.overallStatus}</span>
+      </div>
+
+      ${rcaContent}
+
+      <div class="timeline-container">
+        <button class="timeline-toggle" onclick="toggleTimeline(this)">
+          ▶ Show Event Timeline (${s.timeline ? s.timeline.length : 0} events)
+        </button>
+        <div class="timeline-items" style="display: none;">
+          ${timelineRows}
+        </div>
+      </div>
+    `;
+
+    sessionsList.appendChild(card);
+  }
+}
+
+window.toggleTimeline = function(btn) {
+  const container = btn.nextElementSibling;
+  if (container.style.display === 'none') {
+    container.style.display = 'flex';
+    btn.innerHTML = btn.innerHTML.replace('▶', '▼');
+  } else {
+    container.style.display = 'none';
+    btn.innerHTML = btn.innerHTML.replace('▼', '▶');
+  }
+};
+
+// Export Handlers
+btnExportHtml.addEventListener('click', () => handleExport('html'));
+btnExportMarkdown.addEventListener('click', () => handleExport('markdown'));
+btnExportJson.addEventListener('click', () => handleExport('json'));
+
+async function handleExport(fmt) {
+  if (!currentAnalysis || !window.electronAPI) return;
+  const res = await window.electronAPI.saveExport(fmt, currentAnalysis);
+  if (res.success) {
+    alert(`Report saved to: ${res.filePath}`);
+  }
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function formatMarkdown(text) {
+  if (!text) return '';
+  return text
+    .replace(/### (.*?)\n/g, '<h4 style="color:var(--accent-cyan);margin:6px 0;">$1</h4>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code style="background:rgba(0,0,0,0.4);padding:2px 4px;border-radius:3px;">$1</code>')
+    .replace(/\n\n/g, '<br/><br/>')
+    .replace(/- (.*?)\n/g, '• $1<br/>');
+}

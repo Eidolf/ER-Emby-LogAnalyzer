@@ -1,0 +1,4 @@
+2026-09-21 00:00:00.100 Info App: User Grace is playing Show.mkv on Android. PlayMethod=Transcode, SessionId=sess-perm-07, PlaySessionId=playsess-perm-7
+2026-09-21 00:00:00.200 Info App: ProcessRun 'ffmpeg-transcode' /usr/lib/emby-server/bin/ffmpeg -i "/media/tv/Show.mkv" -c:v libx264 "/var/lib/emby/transcoding-temp/transcode-perm-07.m3u8"
+2026-09-21 00:00:00.900 Error App: FFmpeg process exited with code 1
+2026-09-21 00:00:00.910 Error App: Error in transcode pipeline: Access is denied

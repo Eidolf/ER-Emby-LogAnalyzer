@@ -1,0 +1,32 @@
+{
+  "name": "er-emby-loganalyzer",
+  "version": "1.0.0",
+  "description": "Cross-platform Emby Server and FFmpeg Log Analyzer & Diagnostics Tool",
+  "main": "src/main/index.js",
+  "bin": {
+    "emby-log-analyzer": "./cli/cli.js"
+  },
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/analyzer.test.js",
+    "cli": "node cli/cli.js",
+    "build:linux": "electron-builder --linux",
+    "build:win": "electron-builder --win",
+    "dist": "electron-builder -mwl"
+  },
+  "keywords": [
+    "emby",
+    "log-analyzer",
+    "ffmpeg",
+    "transcoding",
+    "diagnostics",
+    "root-cause-analysis"
+  ],
+  "author": "Eidolf <andreas@eidolf.de>",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^34.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {}
+}

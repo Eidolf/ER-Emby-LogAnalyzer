@@ -1,0 +1,6 @@
+ffmpeg version 5.1.2-emby Copyright (c) 2000-2022 the FFmpeg developers
+Command: /usr/lib/emby-server/bin/ffmpeg -i "/media/movies/CorruptedClip.mkv" "/var/lib/emby/transcoding-temp/transcode-corrupt-06.m3u8"
+[matroska,webm @ 0x55bc10] EBML header parsing failed
+[matroska,webm @ 0x55bc10] Invalid data found when processing input
+/media/movies/CorruptedClip.mkv: Invalid data found when processing input
+ffmpeg exit code: 1
