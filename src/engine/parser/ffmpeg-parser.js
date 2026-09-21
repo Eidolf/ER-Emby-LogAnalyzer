@@ -88,7 +88,7 @@ class FFmpegParser {
       }
 
       // Extract User from User policy line if present
-      // e.g. ">>>>>>  User policy for Alex"
+      // e.g. ">>>>>>  User policy for demoUser"
       if (!user && line.includes('User policy for')) {
         const uMatch = line.match(/User policy for\s+([^\r\n.]+)/i);
         if (uMatch) {

@@ -31,7 +31,7 @@ class EmbyParser {
 
     // Emby standard log line pattern:
     // e.g. "2026-09-20 14:15:22.123 Info App: User user1 is playing ..."
-    // e.g. "2026-09-18 10:50:44.826 Info UniversalAudioService-0HNOE1NSCNV5T:0000000F: User policy for susi..."
+    // e.g. "2026-09-18 10:50:44.826 Info UniversalAudioService-0HNOE1NSCNV5T:0000000F: User policy for demoUser..."
     const logLineRegex = /^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+([A-Za-z]+)\s+(.+?):\s+(.*)$/;
 
     let lastEntry = null;
@@ -95,8 +95,8 @@ class EmbyParser {
     const lower = msg.toLowerCase();
 
     // Track User policy lines
-    // e.g.: "User policy for susi. EnableAudioPlaybackTranscoding: True"
-    // e.g.: "User policy for Alex."
+    // e.g.: "User policy for demoUser. EnableAudioPlaybackTranscoding: True"
+    // e.g.: "User policy for demoUser."
     if (msg.includes('User policy for')) {
       const upMatch = msg.match(/User policy for\s+([^.\r\n]+)/i);
       if (upMatch && context) {
@@ -116,7 +116,7 @@ class EmbyParser {
 
     // Playback starting / playback reported
     // Pattern 1: "User John is playing Big Buck Bunny on Android TV. PlayMethod=DirectPlay"
-    // Pattern 2: "Playback start reported by app AndroidTv 2.1.55g on KDL-55W805C playing Captain America: The First Avenger. Position: 4749358 ms. PlaySessionId: 07c82fb558ea44a2a3852fb682dd2ada"
+    // Pattern 2: "Playback start reported by app AndroidTv 2.1.55g on TV-LivingRoom playing Big Buck Bunny. Position: 4749358 ms. PlaySessionId: 07c82fb558ea44a2a3852fb682dd2ada"
     const playMatch1 = msg.match(/User\s+(.+?)\s+is playing\s+(.+?)\s+on\s+([^.]+)\.?/i);
     const playMatch2 = msg.match(/Playback start reported by app\s+(.+?)\s+on\s+(.+?)\s+playing\s+(.+?)\.\s+Position:.*?PlaySessionId:\s*([a-zA-Z0-9_-]+)/i);
 
