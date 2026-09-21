@@ -62,6 +62,8 @@ jobs:
         run: npm ci
 
       - name: Build Executable Packages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ${{ matrix.build_script }}
 
       - name: Upload Artifacts

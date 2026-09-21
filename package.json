@@ -10,9 +10,9 @@
     "start": "electron . --no-sandbox",
     "test": "node --test test/analyzer.test.js",
     "cli": "node cli/cli.js",
-    "build:linux": "electron-builder --linux",
-    "build:win": "electron-builder --win",
-    "dist": "electron-builder -mwl"
+    "build:linux": "electron-builder --linux --publish never",
+    "build:win": "electron-builder --win --publish never",
+    "dist": "electron-builder -mwl --publish never"
   },
   "keywords": [
     "emby",
