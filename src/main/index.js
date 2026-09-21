@@ -3,6 +3,12 @@ const path = require('path');
 const fs = require('fs');
 const LogAnalyzerEngine = require('../engine/index');
 
+// In container/CI Linux environments, disable the SUID sandbox requirement
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('no-sandbox');
+  app.commandLine.appendSwitch('disable-gpu-sandbox');
+}
+
 let mainWindow = null;
 let analyzerEngine = new LogAnalyzerEngine();
 

@@ -7,7 +7,7 @@
     "emby-log-analyzer": "./cli/cli.js"
   },
   "scripts": {
-    "start": "electron .",
+    "start": "electron . --no-sandbox",
     "test": "node --test test/analyzer.test.js",
     "cli": "node cli/cli.js",
     "build:linux": "electron-builder --linux",
