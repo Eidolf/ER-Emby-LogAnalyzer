@@ -39,6 +39,7 @@ class FFmpegParser {
     let videoDecoder = null;
     let videoEncoder = null;
     let audioEncoder = null;
+    let user = null;
     let fpsSamples = [];
     let startTime = null;
     let endTime = null;
@@ -83,6 +84,15 @@ class FFmpegParser {
         const inpMatch = line.match(/from\s+['"]?([^'"]+)['"]?:?/i);
         if (inpMatch) {
           inputFiles.push(inpMatch[1].trim());
+        }
+      }
+
+      // Extract User from User policy line if present
+      // e.g. ">>>>>>  User policy for Alex"
+      if (!user && line.includes('User policy for')) {
+        const uMatch = line.match(/User policy for\s+([^\r\n.]+)/i);
+        if (uMatch) {
+          user = uMatch[1].trim();
         }
       }
 
@@ -156,6 +166,7 @@ class FFmpegParser {
       videoDecoder,
       videoEncoder,
       audioEncoder,
+      user,
       fpsSamples,
       startTime,
       endTime,

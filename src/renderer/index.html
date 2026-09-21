@@ -107,11 +107,22 @@
         <div class="sessions-section">
           <div class="sessions-filter-bar">
             <h3>Correlated Playback Sessions</h3>
-            <div class="session-filter-buttons">
-              <button class="filter-btn active" data-filter="all">All</button>
-              <button class="filter-btn" data-filter="error">Errors</button>
-              <button class="filter-btn" data-filter="warning">Warnings</button>
-              <button class="filter-btn" data-filter="success">Success</button>
+            <div class="filter-controls-group" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <div class="user-filter-wrapper" style="display: flex; align-items: center; gap: 6px;">
+                <label for="filterUserSelect" style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">USER:</label>
+                <select id="filterUserSelect" class="filter-select" style="background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border-color); padding: 5px 10px; border-radius: 20px; font-size: 0.75rem; outline: none; cursor: pointer;">
+                  <option value="all">All Users</option>
+                </select>
+              </div>
+
+              <input type="text" id="searchMediaInput" placeholder="Filter by title / movie..." style="background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border-color); padding: 5px 12px; border-radius: 20px; font-size: 0.75rem; outline: none; width: 180px;">
+
+              <div class="session-filter-buttons">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="error">Errors</button>
+                <button class="filter-btn" data-filter="warning">Warnings</button>
+                <button class="filter-btn" data-filter="success">Success</button>
+              </div>
             </div>
           </div>
 

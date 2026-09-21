@@ -96,6 +96,9 @@ class SessionCorrelator {
         // Threshold for associating FFmpeg log with session
         if (matchScore >= 40) {
           session.playMethod = 'Transcode';
+          if ((!session.user || session.user === 'App User' || session.user === 'Unknown') && ffmpegLog.user) {
+            session.user = ffmpegLog.user;
+          }
           session.transcodeLogs.push({
             ffmpegLog,
             correlationConfidence: Math.min(100, matchScore),
@@ -113,7 +116,7 @@ class SessionCorrelator {
         id: `orphan_ffmpeg_${orphan.jobId}`,
         sessionId: null,
         playSessionId: null,
-        user: 'Unknown (Standalone FFmpeg)',
+        user: orphan.user || 'Unknown (Standalone FFmpeg)',
         mediaItem: orphan.inputFiles.length > 0 ? path.basename(orphan.inputFiles[0]) : `Transcode Job ${orphan.jobId}`,
         clientDevice: 'Unknown',
         playMethod: 'Transcode',

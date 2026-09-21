@@ -31,10 +31,15 @@ class EmbyParser {
 
     // Emby standard log line pattern:
     // e.g. "2026-09-20 14:15:22.123 Info App: User user1 is playing ..."
-    // e.g. "2026-09-20 14:15:22.123 Debug Server: http/1.1 GET http://..."
-    const logLineRegex = /^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+([A-Za-z]+)\s+([^:]+):\s+(.*)$/;
+    // e.g. "2026-09-18 10:50:44.826 Info UniversalAudioService-0HNOE1NSCNV5T:0000000F: User policy for susi..."
+    const logLineRegex = /^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+([A-Za-z]+)\s+(.+?):\s+(.*)$/;
 
     let lastEntry = null;
+
+    const context = {
+      userByDeviceId: new Map(),
+      lastSeenUser: null
+    };
 
     for await (const line of rl) {
       bytesRead += Buffer.byteLength(line, 'utf8') + 1;
@@ -60,7 +65,7 @@ class EmbyParser {
         };
 
         // Inspect for session & playback activities
-        EmbyParser.inspectLine(entry, sessions, transcodeInvocations, errors);
+        EmbyParser.inspectLine(entry, sessions, transcodeInvocations, errors, context);
 
         entries.push(entry);
         lastEntry = entry;
@@ -85,9 +90,19 @@ class EmbyParser {
     };
   }
 
-  static inspectLine(entry, sessionsMap, transcodeInvocations, errors) {
+  static inspectLine(entry, sessionsMap, transcodeInvocations, errors, context = null) {
     const msg = entry.message;
     const lower = msg.toLowerCase();
+
+    // Track User policy lines
+    // e.g.: "User policy for susi. EnableAudioPlaybackTranscoding: True"
+    // e.g.: "User policy for Alex."
+    if (msg.includes('User policy for')) {
+      const upMatch = msg.match(/User policy for\s+([^.\r\n]+)/i);
+      if (upMatch && context) {
+        context.lastSeenUser = upMatch[1].trim();
+      }
+    }
 
     // Track errors/warnings
     if (entry.level === 'Error' || entry.level === 'Fatal' || lower.includes('exception') || lower.includes('failed')) {
@@ -149,13 +164,14 @@ class EmbyParser {
       const item = playMatch2[3].trim();
       const pSessionId = playMatch2[4].trim();
       const generatedKey = pSessionId || sessionKey || `${item}_${entry.timestamp}`;
+      const resolvedUser = (context && context.lastSeenUser) ? context.lastSeenUser : 'App User';
 
       if (!sessionsMap.has(generatedKey)) {
         sessionsMap.set(generatedKey, {
           id: generatedKey,
           sessionId: sessionIdMatch ? sessionIdMatch[1] : null,
           playSessionId: pSessionId,
-          user: 'App User',
+          user: resolvedUser,
           mediaItem: item,
           clientDevice: `${appName} (${device})`,
           playMethod: playMethodMatch ? playMethodMatch[1] : 'DirectPlay',
@@ -168,6 +184,9 @@ class EmbyParser {
       }
 
       const s = sessionsMap.get(generatedKey);
+      if (s.user === 'App User' && resolvedUser !== 'App User') {
+        s.user = resolvedUser;
+      }
       s.events.push({
         timestamp: entry.timestamp,
         type: 'PLAYBACK_START',

@@ -123,6 +123,47 @@ btnAnalyze.addEventListener('click', async () => {
   }
 });
 
+let selectedUser = 'all';
+let searchKeyword = '';
+
+const filterUserSelect = document.getElementById('filterUserSelect');
+const searchMediaInput = document.getElementById('searchMediaInput');
+
+if (filterUserSelect) {
+  filterUserSelect.addEventListener('change', (e) => {
+    selectedUser = e.target.value;
+    renderSessions();
+  });
+}
+
+if (searchMediaInput) {
+  searchMediaInput.addEventListener('input', (e) => {
+    searchKeyword = (e.target.value || '').trim().toLowerCase();
+    renderSessions();
+  });
+}
+
+function populateUserDropdown(sessions) {
+  if (!filterUserSelect) return;
+  const users = new Set();
+  sessions.forEach(s => {
+    if (s.user && s.user !== 'Unknown' && s.user !== 'App User') {
+      users.add(s.user);
+    }
+  });
+
+  const previousSelection = selectedUser;
+  filterUserSelect.innerHTML = '<option value="all">All Users</option>';
+  
+  Array.from(users).sort().forEach(u => {
+    const opt = document.createElement('option');
+    opt.value = u;
+    opt.textContent = u;
+    if (u === previousSelection) opt.selected = true;
+    filterUserSelect.appendChild(opt);
+  });
+}
+
 function displayResults(data) {
   emptyState.style.display = 'none';
   resultsDashboard.style.display = 'flex';
@@ -144,6 +185,9 @@ function displayResults(data) {
 
   // AI Briefing
   aiBriefingText.innerHTML = formatMarkdown(data.briefing);
+
+  // Populate Users
+  populateUserDropdown(data.sessions);
 
   // Export buttons
   btnExportHtml.disabled = false;
@@ -168,15 +212,29 @@ function renderSessions() {
   sessionsList.innerHTML = '';
 
   const filtered = currentAnalysis.sessions.filter(s => {
-    if (currentFilter === 'all') return true;
-    if (currentFilter === 'error') return s.overallStatus === 'Error' || s.overallStatus === 'Critical';
-    if (currentFilter === 'warning') return s.overallStatus === 'Warning';
-    if (currentFilter === 'success') return s.overallStatus === 'Success';
+    // Status Filter
+    if (currentFilter === 'error' && s.overallStatus !== 'Error' && s.overallStatus !== 'Critical') return false;
+    if (currentFilter === 'warning' && s.overallStatus !== 'Warning') return false;
+    if (currentFilter === 'success' && s.overallStatus !== 'Success') return false;
+
+    // User Filter
+    if (selectedUser !== 'all' && s.user !== selectedUser) {
+      return false;
+    }
+
+    // Media Search Filter
+    if (searchKeyword) {
+      const matchTitle = (s.mediaItem || '').toLowerCase().includes(searchKeyword);
+      const matchUser = (s.user || '').toLowerCase().includes(searchKeyword);
+      const matchDevice = (s.clientDevice || '').toLowerCase().includes(searchKeyword);
+      if (!matchTitle && !matchUser && !matchDevice) return false;
+    }
+
     return true;
   });
 
   if (filtered.length === 0) {
-    sessionsList.innerHTML = `<div style="color: var(--text-muted); font-size: 0.85rem; padding: 20px;">No sessions match filter "${currentFilter}".</div>`;
+    sessionsList.innerHTML = `<div style="color: var(--text-muted); font-size: 0.85rem; padding: 20px;">No sessions match the selected filters (User: ${escapeHtml(selectedUser)}, Status: ${escapeHtml(currentFilter)}).</div>`;
     return;
   }
 
