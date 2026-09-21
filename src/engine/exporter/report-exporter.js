@@ -29,9 +29,14 @@ class ReportExporter {
     md += `## Detailed Session Analysis\n\n`;
 
     for (const s of sessions) {
+      const connStr = s.connection && s.connection.ip 
+        ? `${s.connection.protocol} (${s.connection.ip}) via ${s.connection.route}` 
+        : 'N/A';
+
       md += `### Session: ${s.mediaItem || 'Unknown Media'} (${s.overallStatus})\n\n`;
       md += `- **User**: ${s.user || 'Unknown'}\n`;
       md += `- **Device**: ${s.clientDevice || 'Unknown'}\n`;
+      md += `- **Connection**: ${connStr}\n`;
       md += `- **Play Method**: ${s.playMethod}\n`;
       md += `- **Start Time**: ${s.startTime || 'N/A'}\n`;
       md += `- **Correlated FFmpeg Logs**: ${s.ffmpegTranscodeLogsCount}\n\n`;
@@ -121,13 +126,23 @@ class ReportExporter {
         `;
       }
 
+      const connStr = s.connection && s.connection.ip
+        ? `<span class="badge" style="background:#3b82f6; font-size:0.75rem;">${s.connection.protocol}</span> <code>${ReportExporter.escapeHtml(s.connection.ip)}</code> (${ReportExporter.escapeHtml(s.connection.route)})`
+        : 'N/A';
+
       sessionCards += `
         <div class="card session-card" style="border-left: 5px solid ${color};">
           <div class="card-header">
             <h3>${ReportExporter.escapeHtml(s.mediaItem || 'Unknown Media')}</h3>
             <span class="badge" style="background:${color};">${s.overallStatus}</span>
           </div>
-          <p class="meta"><strong>User:</strong> ${ReportExporter.escapeHtml(s.user || 'N/A')} | <strong>Device:</strong> ${ReportExporter.escapeHtml(s.clientDevice || 'N/A')} | <strong>Method:</strong> ${s.playMethod} | <strong>FFmpeg Logs:</strong> ${s.ffmpegTranscodeLogsCount}</p>
+          <p class="meta">
+            <strong>User:</strong> ${ReportExporter.escapeHtml(s.user || 'N/A')} | 
+            <strong>Device:</strong> ${ReportExporter.escapeHtml(s.clientDevice || 'N/A')} | 
+            <strong>Connection:</strong> ${connStr} | 
+            <strong>Method:</strong> ${s.playMethod} | 
+            <strong>FFmpeg Logs:</strong> ${s.ffmpegTranscodeLogsCount}
+          </p>
           ${root ? `
             <div class="root-cause">
               <h4>${ReportExporter.escapeHtml(root.title)} <span class="confidence">(${root.confidence}% Confidence)</span></h4>

@@ -280,6 +280,20 @@ function renderSessions() {
       `).join('');
     }
 
+    let connHtml = '';
+    if (s.connection && s.connection.ip) {
+      const isCf = s.connection.isCloudflare;
+      const protoClass = s.connection.protocol === 'IPv6' ? 'badge-ipv6' : 'badge-ipv4';
+      connHtml = `
+        <span class="connection-tag" title="${escapeHtml(s.connection.route)}">
+          Network: 
+          <span class="proto-badge ${protoClass}">${s.connection.protocol}</span>
+          <strong>${escapeHtml(s.connection.ip)}</strong> 
+          <span class="route-badge ${isCf ? 'route-cloudflare' : 'route-direct'}">(${escapeHtml(s.connection.route)})</span>
+        </span>
+      `;
+    }
+
     card.innerHTML = `
       <div class="session-header">
         <div class="session-title-group">
@@ -288,7 +302,8 @@ function renderSessions() {
             <span>User: <strong>${escapeHtml(s.user || 'Unknown')}</strong></span>
             <span>Device: <strong>${escapeHtml(s.clientDevice || 'Unknown')}</strong></span>
             <span>Method: <strong>${escapeHtml(s.playMethod)}</strong></span>
-            <span>Correlated FFmpeg Logs: <strong>${s.ffmpegTranscodeLogsCount}</strong></span>
+            ${connHtml}
+            <span>FFmpeg Logs: <strong>${s.ffmpegTranscodeLogsCount}</strong></span>
           </div>
         </div>
         <span class="status-badge ${badgeClass}">${s.overallStatus}</span>

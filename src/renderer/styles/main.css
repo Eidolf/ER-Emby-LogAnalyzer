@@ -413,6 +413,40 @@ body {
 .badge-error { background: rgba(239, 68, 68, 0.2); color: var(--status-error); border: 1px solid var(--status-error); }
 .badge-critical { background: rgba(220, 38, 38, 0.25); color: #f87171; border: 1px solid var(--status-critical); }
 
+/* Connection & Network Badges */
+.proto-badge {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-right: 2px;
+}
+.badge-ipv4 {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+.badge-ipv6 {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+}
+.route-badge {
+  font-size: 0.72rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.route-cloudflare {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+.route-direct {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
 /* Root Cause Box */
 .rca-box {
   background: rgba(15, 23, 42, 0.6);

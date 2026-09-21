@@ -166,6 +166,7 @@ class RootCauseAnalyzer {
       playMethod: session.playMethod,
       startTime: session.startTime,
       stopTime: session.stopTime,
+      connection: session.connection || null,
       overallStatus,
       primaryRootCause,
       allFindings: uniqueFindings,

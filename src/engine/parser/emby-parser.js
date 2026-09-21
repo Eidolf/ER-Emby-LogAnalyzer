@@ -104,6 +104,92 @@ class EmbyParser {
       }
     }
 
+    // Track DeviceId to User mapping if present in request query/body
+    const deviceIdMatch = msg.match(/DeviceId=([a-zA-Z0-9_-]+)/i) || msg.match(/X-Emby-Device-Id=([a-zA-Z0-9_-]+)/i);
+    const deviceId = deviceIdMatch ? deviceIdMatch[1] : null;
+
+    // Track IP Address, Protocol (IPv4/IPv6), and Routing (Cloudflare Proxy vs Direct / LAN)
+    let extractedIp = null;
+    let isCloudflare = false;
+
+    // 1. Cloudflare Connecting IP header
+    const cfMatch = msg.match(/Cf-Connecting-Ip=([0-9a-fA-F:.]+)/i);
+    if (cfMatch) {
+      extractedIp = cfMatch[1].trim();
+      isCloudflare = true;
+    }
+
+    // 2. X-Forwarded-For header
+    if (!extractedIp) {
+      const xffMatch = msg.match(/X-Forwarded-For=([0-9a-fA-F:.]+)/i);
+      if (xffMatch) {
+        extractedIp = xffMatch[1].split(',')[0].trim();
+      }
+    }
+
+    // 3. Emby Source Ip or RemoteEndPoint
+    if (!extractedIp) {
+      const srcMatch = msg.match(/Source Ip:\s*([0-9a-fA-F:.]+)/i) ||
+                       msg.match(/RemoteEndPoint:\s*([0-9a-fA-F:.]+)/i);
+      if (srcMatch && !srcMatch[1].startsWith('host')) {
+        extractedIp = srcMatch[1].trim();
+      }
+    }
+
+    // 4. Fallback: Explicit client IP or URL host IP (excluding Version: X.X.X.X)
+    if (!extractedIp) {
+      const lineWithoutVersion = msg.replace(/Version[=:\s]+[0-9.]+/gi, '');
+      const ipInUrlMatch = lineWithoutVersion.match(/https?:\/\/([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|\[?[0-9a-fA-F:]{3,}\]?)(?::\d+)?/i);
+      if (ipInUrlMatch) {
+        extractedIp = ipInUrlMatch[1].replace(/[[\]]/g, '').trim();
+      }
+    }
+
+    if (msg.includes('Cdn-Loop=cloudflare') || msg.includes('cf-ray') || msg.includes('Cf-Ray=')) {
+      isCloudflare = true;
+    }
+
+    let connectionInfo = null;
+    if (extractedIp) {
+      const isV6 = extractedIp.includes(':');
+      const isPrivate = /^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|127\.|fe80:|::1)/i.test(extractedIp);
+      
+      let route = 'Direct';
+      if (isCloudflare) {
+        route = 'Cloudflare (Proxy)';
+      } else if (isPrivate) {
+        route = 'LAN / Local Network';
+      } else {
+        route = 'Direct (Firewall / WAN)';
+      }
+
+      connectionInfo = {
+        ip: extractedIp,
+        protocol: isV6 ? 'IPv6' : 'IPv4',
+        route,
+        isCloudflare
+      };
+
+      if (context) {
+        if (deviceId) {
+          context.userByDeviceId.set(deviceId, {
+            ...(context.userByDeviceId.get(deviceId) || {}),
+            connectionInfo
+          });
+        }
+        context.lastSeenConnection = connectionInfo;
+      }
+
+      // If this request contains a playSessionId or sessionId, link connectionInfo directly to existing session
+      const targetPIdMatch = msg.match(/PlaySessionId[=:\s]+([a-zA-Z0-9_-]+)/i);
+      if (targetPIdMatch && sessionsMap.has(targetPIdMatch[1])) {
+        const targetSession = sessionsMap.get(targetPIdMatch[1]);
+        if (!targetSession.connection || targetSession.connection.ip.startsWith('192.168.') && isCloudflare) {
+          targetSession.connection = connectionInfo;
+        }
+      }
+    }
+
     // Track errors/warnings
     if (entry.level === 'Error' || entry.level === 'Fatal' || lower.includes('exception') || lower.includes('failed')) {
       errors.push({
@@ -129,6 +215,8 @@ class EmbyParser {
     if (playSessionMatch) sessionKey = playSessionMatch[1];
     else if (sessionIdMatch) sessionKey = sessionIdMatch[1];
 
+    const currentConn = connectionInfo || (deviceId && context && context.userByDeviceId.has(deviceId) ? context.userByDeviceId.get(deviceId).connectionInfo : null) || (context ? context.lastSeenConnection : null);
+
     if (playMatch1) {
       const user = playMatch1[1].trim();
       const item = playMatch1[2].trim();
@@ -147,16 +235,20 @@ class EmbyParser {
           startTime: entry.timestamp,
           stopTime: null,
           status: 'Active',
+          connection: currentConn,
           events: [],
           transcodeJobs: []
         });
       }
 
       const s = sessionsMap.get(generatedKey);
+      if (!s.connection && currentConn) {
+        s.connection = currentConn;
+      }
       s.events.push({
         timestamp: entry.timestamp,
         type: 'PLAYBACK_START',
-        details: `User ${user} started playing "${item}" on ${device}`
+        details: `User ${user} started playing "${item}" on ${device}${s.connection ? ` [${s.connection.protocol} via ${s.connection.route}: ${s.connection.ip}]` : ''}`
       });
     } else if (playMatch2) {
       const appName = playMatch2[1].trim();
@@ -178,6 +270,7 @@ class EmbyParser {
           startTime: entry.timestamp,
           stopTime: null,
           status: 'Active',
+          connection: currentConn,
           events: [],
           transcodeJobs: []
         });
@@ -187,10 +280,13 @@ class EmbyParser {
       if (s.user === 'App User' && resolvedUser !== 'App User') {
         s.user = resolvedUser;
       }
+      if (!s.connection && currentConn) {
+        s.connection = currentConn;
+      }
       s.events.push({
         timestamp: entry.timestamp,
         type: 'PLAYBACK_START',
-        details: `Playback started for "${item}" on ${device} (${appName})`
+        details: `Playback started for "${item}" on ${device} (${appName})${s.connection ? ` [${s.connection.protocol} via ${s.connection.route}: ${s.connection.ip}]` : ''}`
       });
     }
 
