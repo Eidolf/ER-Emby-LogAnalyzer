@@ -95,6 +95,7 @@ class SessionCorrelator {
 
         // Threshold for associating FFmpeg log with session
         if (matchScore >= 40) {
+          session.playMethod = 'Transcode';
           session.transcodeLogs.push({
             ffmpegLog,
             correlationConfidence: Math.min(100, matchScore),

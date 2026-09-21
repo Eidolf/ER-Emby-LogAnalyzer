@@ -100,9 +100,11 @@ class EmbyParser {
     }
 
     // Playback starting / playback reported
-    // e.g.: "User John is playing Big Buck Bunny on Android TV. PlayMethod=DirectPlay"
-    // e.g.: "Playback start reported: ..." or "PlaySessionId: 1a2b3c"
-    const playMatch = msg.match(/User\s+(.+?)\s+is playing\s+(.+?)\s+on\s+([^.]+)\.?/i);
+    // Pattern 1: "User John is playing Big Buck Bunny on Android TV. PlayMethod=DirectPlay"
+    // Pattern 2: "Playback start reported by app AndroidTv 2.1.55g on KDL-55W805C playing Captain America: The First Avenger. Position: 4749358 ms. PlaySessionId: 07c82fb558ea44a2a3852fb682dd2ada"
+    const playMatch1 = msg.match(/User\s+(.+?)\s+is playing\s+(.+?)\s+on\s+([^.]+)\.?/i);
+    const playMatch2 = msg.match(/Playback start reported by app\s+(.+?)\s+on\s+(.+?)\s+playing\s+(.+?)\.\s+Position:.*?PlaySessionId:\s*([a-zA-Z0-9_-]+)/i);
+
     const playSessionMatch = msg.match(/PlaySessionId[=:\s]+([a-zA-Z0-9_-]+)/i);
     const sessionIdMatch = msg.match(/SessionId[=:\s]+([a-zA-Z0-9_-]+)/i);
     const mediaSourceMatch = msg.match(/MediaSourceId[=:\s]+([a-zA-Z0-9_-]+)/i);
@@ -112,10 +114,10 @@ class EmbyParser {
     if (playSessionMatch) sessionKey = playSessionMatch[1];
     else if (sessionIdMatch) sessionKey = sessionIdMatch[1];
 
-    if (playMatch) {
-      const user = playMatch[1].trim();
-      const item = playMatch[2].trim();
-      const device = playMatch[3].trim();
+    if (playMatch1) {
+      const user = playMatch1[1].trim();
+      const item = playMatch1[2].trim();
+      const device = playMatch1[3].trim();
       const generatedKey = sessionKey || `${user}_${item}_${entry.timestamp}`;
 
       if (!sessionsMap.has(generatedKey)) {
@@ -140,6 +142,36 @@ class EmbyParser {
         timestamp: entry.timestamp,
         type: 'PLAYBACK_START',
         details: `User ${user} started playing "${item}" on ${device}`
+      });
+    } else if (playMatch2) {
+      const appName = playMatch2[1].trim();
+      const device = playMatch2[2].trim();
+      const item = playMatch2[3].trim();
+      const pSessionId = playMatch2[4].trim();
+      const generatedKey = pSessionId || sessionKey || `${item}_${entry.timestamp}`;
+
+      if (!sessionsMap.has(generatedKey)) {
+        sessionsMap.set(generatedKey, {
+          id: generatedKey,
+          sessionId: sessionIdMatch ? sessionIdMatch[1] : null,
+          playSessionId: pSessionId,
+          user: 'App User',
+          mediaItem: item,
+          clientDevice: `${appName} (${device})`,
+          playMethod: playMethodMatch ? playMethodMatch[1] : 'DirectPlay',
+          startTime: entry.timestamp,
+          stopTime: null,
+          status: 'Active',
+          events: [],
+          transcodeJobs: []
+        });
+      }
+
+      const s = sessionsMap.get(generatedKey);
+      s.events.push({
+        timestamp: entry.timestamp,
+        type: 'PLAYBACK_START',
+        details: `Playback started for "${item}" on ${device} (${appName})`
       });
     }
 

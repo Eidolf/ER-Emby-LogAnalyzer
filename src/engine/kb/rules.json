@@ -176,6 +176,26 @@
     ]
   },
   {
+    "id": "FFMPEG_PACKET_BUFFER_OVERFLOW",
+    "category": "Transcoding & Subtitles",
+    "patterns": [
+      "Too many packets buffered for output stream",
+      "Conversion failed!",
+      "Error muxing a packet"
+    ],
+    "target": "ffmpeg",
+    "title": "FFmpeg Packet Buffer Overflow / Demux Desynchronization",
+    "rootCause": "FFmpeg packet buffer exceeded queue limits during muxing/transcoding (often caused by subtitle stream timestamp desync or high muxdelay).",
+    "severity": "Error",
+    "confidence": 95,
+    "explanation": "FFmpeg buffers packets when interleaving video, audio, and subtitle streams (e.g. VTT / PGS). If one stream lags significantly behind or possesses invalid PTS timestamps, the internal packet queue fills up and triggers 'Too many packets buffered for output stream', terminating transcoding.",
+    "recommendations": [
+      "In Emby Server Transcoding settings, disable 'Allow subtitle extraction on the fly' or switch subtitle track from PGS/VobSub to external SRT.",
+      "Re-mux the media container with MKVToolNix to fix subtitle stream PTS timestamp desynchronization.",
+      "Increase `-max_muxing_queue_size` if using custom FFmpeg arguments."
+    ]
+  },
+  {
     "id": "SESSION_TIMEOUT_INACTIVE",
     "category": "Session",
     "patterns": [
