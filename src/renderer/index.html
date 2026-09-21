@@ -103,8 +103,14 @@
           <div class="briefing-body" id="aiBriefingText">Analyzing...</div>
         </div>
 
-        <!-- Sessions Section -->
-        <div class="sessions-section">
+        <!-- Submenu Tabs: Sessions vs Visual Playback Timeline -->
+        <div class="view-tabs-bar" style="display: flex; gap: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+          <button id="tabBtnSessions" class="view-tab-btn active" style="background: none; border: none; font-size: 0.95rem; font-weight: 600; color: var(--accent-cyan); cursor: pointer; padding: 6px 12px; border-bottom: 2px solid var(--accent-cyan);">📋 Session Diagnostics</button>
+          <button id="tabBtnTimeline" class="view-tab-btn" style="background: none; border: none; font-size: 0.95rem; font-weight: 600; color: var(--text-muted); cursor: pointer; padding: 6px 12px; border-bottom: 2px solid transparent;">⏱️ Playback Sequence & Gaps (Timeline)</button>
+        </div>
+
+        <!-- Sessions Section View -->
+        <div id="viewSessionsContainer" class="sessions-section">
           <div class="sessions-filter-bar">
             <h3>Correlated Playback Sessions</h3>
             <div class="filter-controls-group" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
@@ -127,6 +133,18 @@
           </div>
 
           <div id="sessionsList" class="sessions-list"></div>
+        </div>
+
+        <!-- Visual Timeline & Sequence View -->
+        <div id="viewTimelineContainer" class="timeline-view-section" style="display: none; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <div>
+              <h3 style="font-size: 1.1rem; color: #fff;">Chronological Playback Flow & Interruption Analysis</h3>
+              <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Visualizes exact track switches, pause/stop timestamps, transfer latency spikes, and silent playback gaps.</p>
+            </div>
+            <div id="timelineSummaryBadge" style="font-size: 0.8rem; color: var(--accent-cyan); font-weight: 600;"></div>
+          </div>
+          <div id="visualTimelineChart" style="display: flex; flex-direction: column; gap: 12px;"></div>
         </div>
       </div>
     </main>

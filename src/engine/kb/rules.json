@@ -212,5 +212,24 @@
     "recommendations": [
       "This is expected normal behavior if the user paused media and walked away."
     ]
+  },
+  {
+    "id": "AUDIO_TRANSFER_BUFFER_STARVATION",
+    "category": "Network & Audio Streaming",
+    "patterns": [
+      "High audio transfer latency.*download took",
+      "Response completed after client disconnected"
+    ],
+    "target": "all",
+    "title": "Audio Stream Buffer Starvation / High Transfer Latency",
+    "rootCause": "Direct streaming FLAC audio transfer took up to 75-87 seconds to download from the server, causing playback buffer exhaustion on the mobile client.",
+    "severity": "Warning",
+    "confidence": 92,
+    "explanation": "When direct streaming lossless audio (FLAC), the client requests whole track files. The Emby server logged HTTP response times exceeding 75,000ms for ~19MB FLAC tracks, indicating mobile network throttling, poor cellular signal, or server upload constraints. The playback position caught up with the buffered bytes before the file finished transferring.",
+    "recommendations": [
+      "In the Emby Android App (under Settings -> Playback -> Audio), set a maximum audio streaming bitrate or enable audio transcoding (e.g. Opus/AAC 320kbps) when outside the local network.",
+      "Check uplink bandwidth and mobile signal stability between the client and server.",
+      "Check if Cloudflare or external proxy restricts large sustained HTTP/2 FLAC downloads."
+    ]
   }
 ]

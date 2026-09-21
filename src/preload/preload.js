@@ -1,10 +1,11 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   openFiles: () => ipcRenderer.invoke('dialog:openFiles'),
   runAnalysis: (filePaths) => ipcRenderer.invoke('analyzer:run', filePaths),
   saveExport: (format, data) => ipcRenderer.invoke('dialog:saveExport', { format, data }),
   loadSample: (sampleFolder) => ipcRenderer.invoke('app:loadSample', sampleFolder),
+  getPathForFile: (file) => (webUtils && webUtils.getPathForFile ? webUtils.getPathForFile(file) : (file.path || null)),
   onProgress: (callback) => {
     const handler = (event, val) => callback(val);
     ipcRenderer.on('analyzer:progress', handler);

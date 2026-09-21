@@ -330,6 +330,63 @@ class EmbyParser {
       }
     }
 
+    // Playback progress (Pause, Unpause, Volume, Seek, Buffer)
+    if (msg.includes('Playback progress')) {
+      let targetSession = null;
+      if (sessionKey && sessionsMap.has(sessionKey)) {
+        targetSession = sessionsMap.get(sessionKey);
+      } else {
+        for (const [key, s] of sessionsMap.entries()) {
+          if (s.playSessionId && msg.includes(s.playSessionId)) {
+            targetSession = s;
+            break;
+          }
+        }
+      }
+
+      if (targetSession) {
+        let pType = 'PLAYBACK_PROGRESS';
+        if (msg.includes('(Pause)')) pType = 'PLAYBACK_PAUSE';
+        else if (msg.includes('(Unpause)')) pType = 'PLAYBACK_UNPAUSE';
+        else if (msg.includes('(PlaylistItemMove)')) pType = 'PLAYLIST_MOVE';
+
+        // Filter out spammy volume changes, keep Pause/Unpause/Position info
+        if (!msg.includes('(VolumeChange)')) {
+          targetSession.events.push({
+            timestamp: entry.timestamp,
+            type: pType,
+            details: msg
+          });
+        }
+      }
+    }
+
+    // Audio stream transfer duration warning (e.g. download took > 10 seconds indicating buffer starvation)
+    if (msg.includes('/emby/Audio/') && msg.includes('Response 200') && msg.includes('Time: ')) {
+      const timeMatch = msg.match(/Time:\s*(\d+)ms/i);
+      if (timeMatch) {
+        const ms = parseInt(timeMatch[1], 10);
+        if (ms > 5000) {
+          const pMatch = msg.match(/PlaySessionId[=:\s]+([a-zA-Z0-9_-]+)/i);
+          let targetSession = null;
+          if (pMatch && sessionsMap.has(pMatch[1])) {
+            targetSession = sessionsMap.get(pMatch[1]);
+          } else {
+            const allS = Array.from(sessionsMap.values());
+            targetSession = allS[allS.length - 1];
+          }
+
+          if (targetSession) {
+            targetSession.events.push({
+              timestamp: entry.timestamp,
+              type: 'AUDIO_BUFFER_LATENCY',
+              details: `High audio transfer latency: FLAC/audio download took ${(ms / 1000).toFixed(1)}s (${ms}ms) from server to client. May cause playback stall/buffering.`
+            });
+          }
+        }
+      }
+    }
+
     // Playback stop / Session ended / Network Disconnect / Errors
     if (lower.includes('playback stopped') || (lower.includes('session') && lower.includes('has ended')) || lower.includes('connection reset') || lower.includes('client disconnected')) {
       let targetSession = null;

@@ -35,8 +35,13 @@ btnBrowseFiles.addEventListener('click', async () => {
   }
 });
 
+// Prevent default browser drop behavior (navigation/open file) on entire window
+window.addEventListener('dragover', (e) => e.preventDefault(), false);
+window.addEventListener('drop', (e) => e.preventDefault(), false);
+
 dropZone.addEventListener('dragover', (e) => {
   e.preventDefault();
+  e.stopPropagation();
   dropZone.classList.add('drag-over');
 });
 
@@ -46,9 +51,16 @@ dropZone.addEventListener('dragleave', () => {
 
 dropZone.addEventListener('drop', (e) => {
   e.preventDefault();
+  e.stopPropagation();
   dropZone.classList.remove('drag-over');
-  if (e.dataTransfer.files) {
-    const paths = Array.from(e.dataTransfer.files).map(f => f.path).filter(Boolean);
+  if (e.dataTransfer && e.dataTransfer.files) {
+    const paths = Array.from(e.dataTransfer.files).map(f => {
+      if (window.electronAPI && window.electronAPI.getPathForFile) {
+        return window.electronAPI.getPathForFile(f);
+      }
+      return f.path || null;
+    }).filter(Boolean);
+
     if (paths.length > 0) {
       addFiles(paths);
     }
@@ -322,6 +334,132 @@ function renderSessions() {
     `;
 
     sessionsList.appendChild(card);
+  }
+}
+
+// View Tab Switching
+const tabBtnSessions = document.getElementById('tabBtnSessions');
+const tabBtnTimeline = document.getElementById('tabBtnTimeline');
+const viewSessionsContainer = document.getElementById('viewSessionsContainer');
+const viewTimelineContainer = document.getElementById('viewTimelineContainer');
+const visualTimelineChart = document.getElementById('visualTimelineChart');
+const timelineSummaryBadge = document.getElementById('timelineSummaryBadge');
+
+if (tabBtnSessions && tabBtnTimeline) {
+  tabBtnSessions.addEventListener('click', () => {
+    tabBtnSessions.classList.add('active');
+    tabBtnSessions.style.color = 'var(--accent-cyan)';
+    tabBtnSessions.style.borderBottomColor = 'var(--accent-cyan)';
+    tabBtnTimeline.classList.remove('active');
+    tabBtnTimeline.style.color = 'var(--text-muted)';
+    tabBtnTimeline.style.borderBottomColor = 'transparent';
+
+    viewSessionsContainer.style.display = 'flex';
+    viewTimelineContainer.style.display = 'none';
+  });
+
+  tabBtnTimeline.addEventListener('click', () => {
+    tabBtnTimeline.classList.add('active');
+    tabBtnTimeline.style.color = 'var(--accent-cyan)';
+    tabBtnTimeline.style.borderBottomColor = 'var(--accent-cyan)';
+    tabBtnSessions.classList.remove('active');
+    tabBtnSessions.style.color = 'var(--text-muted)';
+    tabBtnSessions.style.borderBottomColor = 'transparent';
+
+    viewSessionsContainer.style.display = 'none';
+    viewTimelineContainer.style.display = 'block';
+    renderVisualTimeline();
+  });
+}
+
+function renderVisualTimeline() {
+  if (!currentAnalysis || !visualTimelineChart) return;
+  visualTimelineChart.innerHTML = '';
+
+  const sessions = currentAnalysis.sessions.filter(s => {
+    if (selectedUser !== 'all' && s.user !== selectedUser) return false;
+    if (searchKeyword && !(s.mediaItem || '').toLowerCase().includes(searchKeyword)) return false;
+    return true;
+  });
+
+  if (sessions.length === 0) {
+    visualTimelineChart.innerHTML = `<div style="color: var(--text-muted); font-size: 0.85rem; padding: 20px;">No sessions available for the timeline view.</div>`;
+    return;
+  }
+
+  // Sort sessions chronologically
+  sessions.sort((a, b) => {
+    const ta = Date.parse((a.startTime || '').replace(/,/g, '.')) || 0;
+    const tb = Date.parse((b.startTime || '').replace(/,/g, '.')) || 0;
+    return ta - tb;
+  });
+
+  let totalGaps = 0;
+  let prevStop = null;
+
+  for (let i = 0; i < sessions.length; i++) {
+    const s = sessions[i];
+    const startMs = Date.parse((s.startTime || '').replace(/,/g, '.')) || null;
+    const stopMs = Date.parse((s.stopTime || '').replace(/,/g, '.')) || null;
+
+    // Check gap between previous track stop and this track start
+    let gapHtml = '';
+    if (prevStop && startMs) {
+      const diffSec = Math.round((startMs - prevStop) / 1000);
+      if (diffSec > 0) {
+        totalGaps++;
+        const isLongGap = diffSec > 10;
+        gapHtml = `
+          <div class="timeline-gap-indicator" style="display: flex; align-items: center; justify-content: center; margin: 4px 0; padding: 4px 12px; background: ${isLongGap ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.1)'}; border-left: 3px solid ${isLongGap ? 'var(--status-error)' : 'var(--status-warning)'}; border-radius: 4px; font-size: 0.75rem; color: ${isLongGap ? '#f87171' : '#fbbf24'};">
+            ⏸️ Playback Interruption / Pause: <strong>${diffSec} seconds gap</strong> between tracks
+          </div>
+        `;
+      }
+    }
+
+    if (stopMs) {
+      prevStop = stopMs;
+    } else if (startMs) {
+      prevStop = startMs;
+    }
+
+    // Check for high latency / buffer events in timeline
+    const latencyEvents = (s.timeline || []).filter(e => e.type === 'AUDIO_BUFFER_LATENCY' || (e.details && e.details.includes('download took')));
+
+    let latencyWarningHtml = '';
+    if (latencyEvents.length > 0) {
+      latencyWarningHtml = `
+        <div style="margin-top: 6px; padding: 6px 10px; background: rgba(245, 158, 11, 0.15); border-left: 3px solid var(--status-warning); border-radius: 4px; font-size: 0.75rem; color: #fde68a;">
+          ⚠️ Buffer Latency: ${escapeHtml(latencyEvents[0].details)}
+        </div>
+      `;
+    }
+
+    const itemCard = document.createElement('div');
+    itemCard.className = 'timeline-flow-card';
+    itemCard.style.cssText = 'background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px;';
+
+    const connStr = s.connection ? `${s.connection.protocol} via ${s.connection.route} (${s.connection.ip})` : 'Direct LAN';
+
+    itemCard.innerHTML = `
+      ${gapHtml}
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-weight: 600; color: #fff; font-size: 0.9rem;">🎵 ${escapeHtml(s.mediaItem)}</span>
+        <span style="font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">${escapeHtml(s.startTime || '-')} → ${escapeHtml(s.stopTime || 'Now')}</span>
+      </div>
+      <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; display: flex; gap: 12px;">
+        <span>User: <strong>${escapeHtml(s.user)}</strong></span>
+        <span>Device: <strong>${escapeHtml(s.clientDevice)}</strong></span>
+        <span>Network: <strong>${escapeHtml(connStr)}</strong></span>
+      </div>
+      ${latencyWarningHtml}
+    `;
+
+    visualTimelineChart.appendChild(itemCard);
+  }
+
+  if (timelineSummaryBadge) {
+    timelineSummaryBadge.textContent = `${sessions.length} Tracks | ${totalGaps} Interruption Gaps Detected`;
   }
 }
 
