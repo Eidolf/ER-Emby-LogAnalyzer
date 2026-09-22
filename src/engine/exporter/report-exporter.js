@@ -126,8 +126,16 @@ class ReportExporter {
         `;
       }
 
+      let sslPill = '';
+      if (s.connection && s.connection.sslStatus) {
+        let sslColor = '#10b981';
+        if (s.connection.sslStatus === 'yellow') sslColor = '#f59e0b';
+        else if (s.connection.sslStatus === 'red') sslColor = '#ef4444';
+        sslPill = `<span class="badge" style="background:${sslColor}; font-size:0.7rem; padding: 2px 6px;">${s.connection.scheme === 'HTTPS' ? '🔒 HTTPS' : '🔓 HTTP'}</span> `;
+      }
+
       const connStr = s.connection && s.connection.ip
-        ? `<span class="badge" style="background:#3b82f6; font-size:0.75rem;">${s.connection.protocol}</span> <code>${ReportExporter.escapeHtml(s.connection.ip)}</code> (${ReportExporter.escapeHtml(s.connection.route)})`
+        ? `${sslPill}<span class="badge" style="background:#3b82f6; font-size:0.75rem;">${s.connection.protocol}</span> <code>${ReportExporter.escapeHtml(s.connection.ip)}</code> (${ReportExporter.escapeHtml(s.connection.route)})`
         : 'N/A';
 
       sessionCards += `

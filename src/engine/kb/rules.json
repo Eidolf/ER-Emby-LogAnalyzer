@@ -231,5 +231,79 @@
       "Check uplink bandwidth and mobile signal stability between the client and server.",
       "Check if Cloudflare or external proxy restricts large sustained HTTP/2 FLAC downloads."
     ]
+  },
+  {
+    "id": "INSECURE_EXTERNAL_HTTP",
+    "category": "Security & Network",
+    "patterns": [
+      "HTTP Insecure \\(External WAN\\)"
+    ],
+    "target": "emby",
+    "title": "Insecure External HTTP Connection Detected",
+    "rootCause": "A client connected to Emby over unencrypted HTTP (port 8096 or cleartext WAN) without SSL/TLS encryption.",
+    "severity": "Warning",
+    "confidence": 94,
+    "explanation": "External playback or login requests over HTTP expose user session tokens, passwords, and playback data in cleartext across public networks.",
+    "recommendations": [
+      "Enforce HTTPS in Emby Server Dashboard -> Advanced -> Hosting (set 'Require secure connection' or redirect HTTP to HTTPS).",
+      "Ensure your reverse proxy (Cloudflare, Nginx, Caddy, Traefik) forces SSL redirection.",
+      "Close or un-forward external HTTP port 8096 on your internet router."
+    ]
+  },
+  {
+    "id": "VULNERABILITY_SCANNER_DETECTED",
+    "category": "Security & Network",
+    "patterns": [
+      "GET https?://[^/]+/(\\.env|wp-admin|database\\.sql|\\.ssh/|s3/credentials|\\.boto|wp-login)"
+    ],
+    "target": "emby",
+    "title": "External Vulnerability Scanner / Bot Traffic Detected",
+    "rootCause": "Automated internet bots and vulnerability scanners are probing your exposed Emby port for configuration and secret files.",
+    "severity": "Warning",
+    "confidence": 95,
+    "explanation": "Scanners frequently crawl public IP ranges targeting WordPress, AWS `.env`, and SSH credentials. While Emby returned 404 Not Found, exposing Emby directly increases attack surface.",
+    "recommendations": [
+      "Enable Cloudflare Bot Fight Mode / WAF rules to challenge or block non-media client scans.",
+      "Use fail2ban or firewall rules (GeoIP / rate-limiting) to block repeated 404 scanners.",
+      "Consider using a VPN (e.g. WireGuard/Tailscale) or reverse proxy path authentication for remote management."
+    ]
+  },
+  {
+    "id": "TRANSCODE_FORCED_BITRATE_LIMIT",
+    "category": "Bandwidth & Transcoding",
+    "patterns": [
+      "TranscodeReasons=ContainerBitrateExceedsLimit",
+      "Bitrate exceeds DirectPlay limit",
+      "Bitrate exceeds DirectStream limit"
+    ],
+    "target": "emby",
+    "title": "Transcoding Forced by Bitrate / Bandwidth Limit",
+    "rootCause": "Media video codec was compatible, but transcode was triggered because source file bitrate exceeds client/server streaming limit.",
+    "severity": "Info",
+    "confidence": 90,
+    "explanation": "Emby initiated video transcoding even though the client device might support the video container format, because the media bitrate exceeded the maximum streaming bitrate configured on the client or server.",
+    "recommendations": [
+      "If playing over local LAN or fast fiber connection, increase 'Internet Quality' or 'Home Network Quality' to Maximum / Auto in the client app.",
+      "Verify server remote streaming bitrate limits in Emby Dashboard -> Network."
+    ]
+  },
+  {
+    "id": "METADATA_PROVIDER_FAILURE",
+    "category": "Library & Providers",
+    "patterns": [
+      "MusicBrainzImageProvider failed",
+      "ProviderManager.*failed in GetImageInfos",
+      "MediaBrowser\\.Model\\.Net\\.HttpException.*NotFound"
+    ],
+    "target": "emby",
+    "title": "External Metadata Provider Scraping Failure",
+    "rootCause": "Remote metadata provider (MusicBrainz, Fanart.tv, TheMovieDb) queries failed or timed out during library scan.",
+    "severity": "Warning",
+    "confidence": 88,
+    "explanation": "Emby library refresh was delayed or incomplete because upstream metadata API endpoints returned HTTP 404 or rate-limited scraping requests.",
+    "recommendations": [
+      "Check server internet connectivity and DNS resolution.",
+      "In Emby Library settings, review enabled metadata fetchers and adjust provider priority."
+    ]
   }
 ]

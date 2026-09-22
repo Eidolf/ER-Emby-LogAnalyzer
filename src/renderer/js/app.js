@@ -296,9 +296,19 @@ function renderSessions() {
     if (s.connection && s.connection.ip) {
       const isCf = s.connection.isCloudflare;
       const protoClass = s.connection.protocol === 'IPv6' ? 'badge-ipv6' : 'badge-ipv4';
+      
+      let sslBadgeClass = 'ssl-badge-green';
+      if (s.connection.sslStatus === 'red') {
+        sslBadgeClass = 'ssl-badge-red';
+      } else if (s.connection.sslStatus === 'yellow') {
+        sslBadgeClass = 'ssl-badge-yellow';
+      }
+
       connHtml = `
         <span class="connection-tag" title="${escapeHtml(s.connection.route)}">
-          Network: 
+          <span class="ssl-badge ${sslBadgeClass}" title="${escapeHtml(s.connection.sslLabel || s.connection.scheme)}">
+            ${s.connection.scheme === 'HTTPS' ? '🔒 HTTPS' : '🔓 HTTP'}
+          </span>
           <span class="proto-badge ${protoClass}">${s.connection.protocol}</span>
           <strong>${escapeHtml(s.connection.ip)}</strong> 
           <span class="route-badge ${isCf ? 'route-cloudflare' : 'route-direct'}">(${escapeHtml(s.connection.route)})</span>

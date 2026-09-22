@@ -149,6 +149,14 @@ class EmbyParser {
       isCloudflare = true;
     }
 
+    // Detect URL Scheme (HTTPS vs HTTP)
+    let scheme = 'HTTP';
+    if (msg.includes('https://') || msg.includes('X-Forwarded-Proto=https') || msg.includes(':8920/')) {
+      scheme = 'HTTPS';
+    } else if (msg.includes('http://') || msg.includes(':8096/')) {
+      scheme = 'HTTP';
+    }
+
     let connectionInfo = null;
     if (extractedIp) {
       const isV6 = extractedIp.includes(':');
@@ -163,11 +171,31 @@ class EmbyParser {
         route = 'Direct (Firewall / WAN)';
       }
 
+      // SSL Security Evaluation:
+      // Green = HTTPS (Encrypted)
+      // Yellow = HTTP but internal LAN (acceptable in home network)
+      // Red = HTTP over external WAN / Proxy (Insecure cleartext transmission of credentials/tokens)
+      let sslStatus = 'green';
+      let sslLabel = 'HTTPS (Encrypted)';
+      if (scheme === 'HTTPS') {
+        sslStatus = 'green';
+        sslLabel = 'HTTPS (Secure)';
+      } else if (isPrivate) {
+        sslStatus = 'yellow';
+        sslLabel = 'HTTP (Internal LAN)';
+      } else {
+        sslStatus = 'red';
+        sslLabel = 'HTTP Insecure (External WAN)';
+      }
+
       connectionInfo = {
         ip: extractedIp,
         protocol: isV6 ? 'IPv6' : 'IPv4',
+        scheme,
         route,
-        isCloudflare
+        isCloudflare,
+        sslStatus,
+        sslLabel
       };
 
       if (context) {
