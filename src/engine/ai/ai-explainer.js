@@ -29,7 +29,9 @@ class AIExplainer {
       if (primaryRootCause.evidence && primaryRootCause.evidence.length > 0) {
         summary += `**Key Evidence Extracted:**\n`;
         for (const ev of primaryRootCause.evidence.slice(0, 3)) {
-          summary += `- \`${ev.replace(/`/g, "'")}\`\n`;
+          if (ev) {
+            summary += `- \`${String(ev).replace(/`/g, "'")}\`\n`;
+          }
         }
         summary += `\n`;
       }

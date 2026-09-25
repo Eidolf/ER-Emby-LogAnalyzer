@@ -266,6 +266,37 @@ function renderSessions() {
       const evList = (root.evidence || []).map(e => `<li>${escapeHtml(e)}</li>`).join('');
       const recList = (root.recommendations || []).map(r => `<li>${escapeHtml(r)}</li>`).join('');
 
+      let allFindingsHtml = '';
+      if (s.allFindings && s.allFindings.length > 1) {
+        const secondary = s.allFindings.slice(1);
+        const secList = secondary.map(f => {
+          let sevColor = '#10b981';
+          if (f.severity === 'Warning') sevColor = '#f59e0b';
+          else if (f.severity === 'Error') sevColor = '#ef4444';
+          else if (f.severity === 'Critical') sevColor = '#dc2626';
+          else if (f.severity === 'Info') sevColor = '#38bdf8';
+
+          return `
+            <li style="margin-bottom: 6px;">
+              <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; color: #fff; background: ${sevColor}; margin-right: 6px;">${f.severity}</span>
+              <strong style="color: #f1f5f9;">${escapeHtml(f.title)}</strong>
+              <div style="font-size: 0.78rem; color: #94a3b8; margin-top: 2px;">${escapeHtml(f.rootCause)}</div>
+            </li>
+          `;
+        }).join('');
+
+        allFindingsHtml = `
+          <div style="margin-top: 10px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 8px;">
+            <button class="btn" style="padding: 4px 10px; font-size: 0.75rem; background: rgba(255,255,255,0.06); border: 1px solid var(--border-color); color: var(--text-muted); border-radius: 6px; cursor: pointer;" onclick="const el = this.nextElementSibling; el.style.display = el.style.display === 'none' ? 'block' : 'none'; this.textContent = el.style.display === 'none' ? '▼ View All Diagnostic Checks (${s.allFindings.length})' : '▲ Hide Diagnostic Checks';">
+              ▼ View All Diagnostic Checks (${s.allFindings.length})
+            </button>
+            <div style="display: none; margin-top: 10px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px;">
+              <ul style="list-style: none; padding-left: 0; margin: 0;">${secList}</ul>
+            </div>
+          </div>
+        `;
+      }
+
       rcaContent = `
         <div class="rca-box">
           <div class="rca-title-row">
@@ -276,6 +307,7 @@ function renderSessions() {
           <p style="font-size:0.85rem; color: #cbd5e1; margin-bottom: 8px;">${escapeHtml(root.explanation)}</p>
           ${root.evidence && root.evidence.length > 0 ? `<strong>Evidence:</strong><ul class="evidence-list">${evList}</ul>` : ''}
           ${root.recommendations && root.recommendations.length > 0 ? `<strong style="margin-top:6px; display:inline-block;">Actionable Remediation:</strong><ul class="recs-list">${recList}</ul>` : ''}
+          ${allFindingsHtml}
         </div>
       `;
     }

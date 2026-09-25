@@ -29,6 +29,14 @@ class EmbyParser {
     const errors = [];
     const transcodeInvocations = [];
 
+    // Server environment metadata
+    let serverVersion = null;
+    let operatingSystem = null; // e.g. Linux version 7.0.0-27-generic
+    let osKernel = null;        // e.g. 7.0.0
+    let osPlatform = 'Unknown'; // Linux, Windows, Android, macOS, BSD
+    let framework = null;       // e.g. .NET 8.0.25
+    let processorCount = null;
+
     // Emby standard log line pattern:
     // e.g. "2026-09-20 14:15:22.123 Info App: User user1 is playing ..."
     // e.g. "2026-09-18 10:50:44.826 Info UniversalAudioService-0HNOE1NSCNV5T:0000000F: User policy for demoUser..."
@@ -41,13 +49,43 @@ class EmbyParser {
       lastSeenUser: null
     };
 
+    let lineIndex = 0;
     for await (const line of rl) {
+      lineIndex++;
       bytesRead += Buffer.byteLength(line, 'utf8') + 1;
       if (onProgress && Math.random() < 0.05) {
         onProgress(Math.min(99, Math.round((bytesRead / totalSize) * 100)));
       }
 
       if (!line.trim()) continue;
+
+      // Extract Server environment info from startup banners
+      if (!serverVersion && line.includes('Emby Server Version:')) {
+        const vMatch = line.match(/Emby Server Version:\s*([0-9.]+)/i);
+        if (vMatch) serverVersion = vMatch[1];
+      }
+      if (!operatingSystem && line.includes('Operating system:')) {
+        const osMatch = line.match(/Operating system:\s*(.+)$/i);
+        if (osMatch) {
+          operatingSystem = osMatch[1].trim();
+          if (/linux/i.test(operatingSystem)) osPlatform = 'Linux';
+          else if (/windows/i.test(operatingSystem)) osPlatform = 'Windows';
+          else if (/darwin|mac/i.test(operatingSystem)) osPlatform = 'macOS';
+          else if (/bsd/i.test(operatingSystem)) osPlatform = 'BSD';
+          else if (/android/i.test(operatingSystem)) osPlatform = 'Android';
+
+          const kMatch = operatingSystem.match(/Linux version\s+([0-9.]+)/i) || operatingSystem.match(/kernel\s+([0-9.]+)/i);
+          if (kMatch) osKernel = kMatch[1];
+        }
+      }
+      if (!framework && line.includes('Framework:')) {
+        const fMatch = line.match(/Framework:\s*(.+)$/i);
+        if (fMatch) framework = fMatch[1].trim();
+      }
+      if (!processorCount && line.includes('Processor count:')) {
+        const pMatch = line.match(/Processor count:\s*(\d+)/i);
+        if (pMatch) processorCount = parseInt(pMatch[1], 10);
+      }
 
       const match = line.match(logLineRegex);
       if (match) {
@@ -86,7 +124,14 @@ class EmbyParser {
       entries,
       sessions: Array.from(sessions.values()),
       errors,
-      transcodeInvocations
+      transcodeInvocations,
+      serverVersion,
+      operatingSystem,
+      osKernel,
+      osPlatform,
+      framework,
+      processorCount,
+      parsedLineCount: lineIndex
     };
   }
 

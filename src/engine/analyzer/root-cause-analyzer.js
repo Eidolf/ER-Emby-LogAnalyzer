@@ -1,10 +1,11 @@
 const KnowledgeBase = require('../kb/knowledge-base');
 const TimelineBuilder = require('./timeline-builder');
+const CodedChecksEngine = require('./coded-checks');
 
 /**
  * Diagnostic & Root Cause Analysis Engine.
- * Evaluates session events, matched KB patterns, FFmpeg exit codes, and hardware errors
- * to calculate confidence scores, identify true root causes, and produce remediation guidance.
+ * Evaluates session events, matched KB patterns, FFmpeg exit codes, hardware errors,
+ * and runs programmatic multi-factor Coded Checks against rich parsed object models.
  */
 class RootCauseAnalyzer {
   constructor(knowledgeBase = null) {
@@ -52,9 +53,23 @@ class RootCauseAnalyzer {
       }
     }
 
-    // 3. Deduplicate findings by ruleId & compute highest confidence
+    // 3. Run programmatic multi-factor Coded Checks on rich parsed object models
+    const codedFindings = CodedChecksEngine.runAllChecks(session, session.serverContext);
+    for (const cf of codedFindings) {
+      matchedFindings.push({
+        ...cf,
+        timestamp: session.startTime || null,
+        source: 'Diagnostic Coded Engine'
+      });
+    }
+
+    // 4. Deduplicate findings by ruleId & compute highest confidence
     const ruleGroups = new Map();
     for (const finding of matchedFindings) {
+      const initialEvidence = Array.isArray(finding.evidence)
+        ? finding.evidence.filter(Boolean)
+        : [finding.contextSnippet || finding.matchedSnippet].filter(Boolean);
+
       if (!ruleGroups.has(finding.ruleId)) {
         ruleGroups.set(finding.ruleId, {
           ruleId: finding.ruleId,
@@ -64,15 +79,17 @@ class RootCauseAnalyzer {
           severity: finding.severity,
           confidence: finding.confidence,
           explanation: finding.explanation,
-          recommendations: finding.recommendations,
+          recommendations: finding.recommendations || [],
           occurrences: 1,
-          evidence: [finding.contextSnippet || finding.matchedSnippet]
+          evidence: initialEvidence
         });
       } else {
         const grp = ruleGroups.get(finding.ruleId);
         grp.occurrences++;
-        if (grp.evidence.length < 5) {
-          grp.evidence.push(finding.contextSnippet || finding.matchedSnippet);
+        for (const ev of initialEvidence) {
+          if (grp.evidence.length < 5 && !grp.evidence.includes(ev)) {
+            grp.evidence.push(ev);
+          }
         }
         // Slightly bump confidence if error pattern repeats
         grp.confidence = Math.min(99, grp.confidence + 2);
@@ -80,13 +97,25 @@ class RootCauseAnalyzer {
     }
 
     const uniqueFindings = Array.from(ruleGroups.values());
-    uniqueFindings.sort((a, b) => b.confidence - a.confidence);
+    const severityWeight = {
+      Critical: 4,
+      Error: 3,
+      Warning: 2,
+      Info: 1
+    };
+    uniqueFindings.sort((a, b) => {
+      const wa = severityWeight[a.severity] || 0;
+      const wb = severityWeight[b.severity] || 0;
+      if (wa !== wb) return wb - wa;
+      return b.confidence - a.confidence;
+    });
 
     // 4. Determine overall status and root causes
     let overallStatus = 'Success';
     let primaryRootCause = null;
 
-    const hasErrors = uniqueFindings.some(f => f.severity === 'Error' || f.severity === 'Critical');
+    const hasCritical = uniqueFindings.some(f => f.severity === 'Critical');
+    const hasErrors = uniqueFindings.some(f => f.severity === 'Error');
     const hasWarnings = uniqueFindings.some(f => f.severity === 'Warning');
 
     // Check FFmpeg exit status
@@ -102,24 +131,47 @@ class RootCauseAnalyzer {
 
     if (uniqueFindings.length > 0) {
       const top = uniqueFindings[0];
-      if (top.severity === 'Critical') {
+      if (hasCritical) {
         overallStatus = 'Critical';
-      } else if (top.severity === 'Error' || ffmpegCrashed) {
+      } else if (hasErrors || ffmpegCrashed) {
         overallStatus = 'Error';
       } else if (hasWarnings) {
         overallStatus = 'Warning';
+      } else {
+        overallStatus = 'Success';
       }
 
-      primaryRootCause = {
-        title: top.title,
-        cause: top.rootCause,
-        category: top.category,
-        confidence: top.confidence,
-        severity: top.severity,
-        explanation: top.explanation,
-        evidence: top.evidence,
-        recommendations: top.recommendations
-      };
+      if (overallStatus === 'Success') {
+        primaryRootCause = {
+          title: 'Playback Successful',
+          cause: session.playMethod === 'DirectPlay'
+            ? 'Media was streamed directly without transcoding. No critical issues detected.'
+            : 'Media was transcoded and streamed smoothly to the client.',
+          category: 'Playback',
+          confidence: 99,
+          severity: 'Success',
+          explanation: 'The session completed normally with no fatal errors detected in either Emby or FFmpeg logs.',
+          evidence: [
+            `PlayMethod: ${session.playMethod}`,
+            `Client: ${session.clientDevice || 'Unknown'}`,
+            `User: ${session.user || 'Unknown'}`
+          ],
+          recommendations: [
+            'No remediation needed. Everything operated as expected.'
+          ]
+        };
+      } else {
+        primaryRootCause = {
+          title: top.title,
+          cause: top.rootCause,
+          category: top.category,
+          confidence: top.confidence,
+          severity: top.severity,
+          explanation: top.explanation,
+          evidence: top.evidence,
+          recommendations: top.recommendations
+        };
+      }
     } else if (ffmpegCrashed) {
       overallStatus = 'Error';
       primaryRootCause = {

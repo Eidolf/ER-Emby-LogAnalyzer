@@ -139,4 +139,93 @@ describe('Emby Log Analyzer Diagnostic Test Suite', () => {
     assert.ok(mdRep.includes('# Emby Log Analyzer Diagnostic Report'));
     assert.ok(htmlRep.includes('<!DOCTYPE html>'));
   });
+
+  it('Coded Checks Engine: evaluates rich object model multi-factor checks', async () => {
+    const CodedChecksEngine = require('../src/engine/analyzer/coded-checks');
+
+    // Synthetic session with rich parsed object models
+    const syntheticSession = {
+      id: 'session-test-01',
+      user: 'Alex',
+      clientDevice: 'SHIELD Android TV (Android 11)',
+      mediaItem: 'Sample 4K Movie.mkv',
+      playMethod: 'Transcode',
+      events: [
+        { details: '/mnt/media_rw/sdcard1/cache' }
+      ],
+      serverContext: {
+        serverVersion: '4.9.5.0',
+        operatingSystem: 'Linux version 5.15.0-generic',
+        osPlatform: 'Linux',
+        osKernel: '5.15.0',
+        parsedLineCount: 1500
+      },
+      transcodeLogs: [
+        {
+          ffmpegLog: {
+            filePath: '/var/log/ffmpeg.txt',
+            fileName: 'ffmpeg-transcode-01.txt',
+            hwaccel: 'QuickSync (Intel)',
+            commandLine: 'ffmpeg -init_hw_device qsv -c:v:0 hevc_qsv -i /long_path -c:v:0 h264_qsv -b:v:0 35000000',
+            ffmpegVersion: '5.1-emby_2023_06_25_p4',
+            isEmbyFfmpeg: true,
+            hasCrashed: false,
+            exitCode: 0,
+            parsedLineCount: 300,
+            userPolicy: {
+              user: 'Alex',
+              enablePlaybackRemuxing: true,
+              enableVideoPlaybackTranscoding: false,
+              enableAudioPlaybackTranscoding: true
+            },
+            hardwareDevices: [
+              { index: 0, name: 'Intel UHD Graphics 770 (Alder Lake)', id: '0x4690', sdkVersion: '1.25' }
+            ],
+            inputStreams: [
+              { id: '0:0', type: 'Video', codec: 'hevc', startTime: 0.0, bitrateKbps: 65000, width: 3840, height: 2160 },
+              { id: '0:1', type: 'Audio', codec: 'truehd 7.1', startTime: 0.8, bitrateKbps: 4500 }
+            ],
+            outputStreams: [
+              { id: '0:0', type: 'Video', codec: 'h264', bitrateKbps: 35000, width: 1920, height: 1080 },
+              { id: '0:1', type: 'Audio', codec: 'aac stereo', bitrateKbps: 384, raw: 'stereo' }
+            ],
+            videoProcessingSteps: ['HEVC_QSV >> QSV qsv p010 >> vpp_qsv'],
+            fpsSamples: [
+              { frame: 100, fps: 18, speed: 0.72 },
+              { frame: 200, fps: 19, speed: 0.75 },
+              { frame: 300, fps: 20, speed: 0.78 }
+            ],
+            avgSpeed: 0.75,
+            minSpeed: 0.72,
+            maxSpeed: 0.78,
+            isSpeedBottleneck: true,
+            errors: [
+              { text: 'Too many packets buffered for output stream 1:1' }
+            ],
+            warnings: [],
+            inputFiles: ['/media/shares/' + 'a'.repeat(265) + '.mkv']
+          }
+        }
+      ]
+    };
+
+    const findings = CodedChecksEngine.runAllChecks(syntheticSession, syntheticSession.serverContext);
+    const ruleIds = findings.map(f => f.ruleId);
+
+    // Verify key multi-factor coded findings triggered on rich models:
+    assert.ok(ruleIds.includes('CheckAvStartOffset'), 'Should detect A/V start offset difference (0.8s >= 0.5s)');
+    assert.ok(ruleIds.includes('CheckIntelLinuxKernelMinVersion'), 'Should detect Alder Lake kernel floor not met (5.15 < 5.16)');
+    assert.ok(ruleIds.includes('CheckMsdkVersion'), 'Should detect legacy MSDK version (1.25 < 1.30)');
+    assert.ok(ruleIds.includes('CheckLongMediaPaths'), 'Should detect excessive file path (>255 chars)');
+    assert.ok(ruleIds.includes('CheckSourceBitrate'), 'Should detect high source bitrate (>50 Mbps)');
+    assert.ok(ruleIds.includes('CheckOutputBitrate'), 'Should detect high output bitrate target (>30 Mbps)');
+    assert.ok(ruleIds.includes('CheckCompareFormat'), 'Should detect video downscale (3840 -> 1920)');
+    assert.ok(ruleIds.includes('CheckCompareStreams'), 'Should detect surround audio downmixing');
+    assert.ok(ruleIds.includes('CheckTranscodingSpeed'), 'Should detect speed bottleneck (0.75x < 1.0x)');
+    assert.ok(ruleIds.includes('SuggestTryWithoutSubtitles'), 'Should suggest trying without subtitles on packet buffer overflow');
+    assert.ok(ruleIds.includes('CheckServerVersion'), 'Should validate Emby server version');
+    assert.ok(ruleIds.includes('CheckFfmpegVersionBackground'), 'Should validate FFmpeg version');
+    assert.ok(ruleIds.includes('CheckUserPolicy'), 'Should flag transcoding forbidden by user policy');
+    assert.ok(ruleIds.includes('CheckParsedLineCount'), 'Should report diagnostic metrics line count');
+  });
 });

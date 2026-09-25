@@ -22,11 +22,22 @@ class SessionCorrelator {
 
     // 1. Gather all Emby sessions
     for (const embyLog of embyLogs) {
+      const serverContext = {
+        serverVersion: embyLog.serverVersion,
+        operatingSystem: embyLog.operatingSystem,
+        osKernel: embyLog.osKernel,
+        osPlatform: embyLog.osPlatform,
+        framework: embyLog.framework,
+        processorCount: embyLog.processorCount,
+        parsedLineCount: embyLog.parsedLineCount
+      };
+
       if (embyLog.sessions && Array.isArray(embyLog.sessions)) {
         for (const s of embyLog.sessions) {
           sessions.push({
             ...s,
             sourceEmbyFile: embyLog.filePath,
+            serverContext,
             ffmpegJobs: [],
             transcodeLogs: []
           });
@@ -126,6 +137,15 @@ class SessionCorrelator {
         events: [],
         transcodeJobs: [orphan.jobId],
         sourceEmbyFile: null,
+        serverContext: embyLogs.length > 0 ? {
+          serverVersion: embyLogs[0].serverVersion,
+          operatingSystem: embyLogs[0].operatingSystem,
+          osKernel: embyLogs[0].osKernel,
+          osPlatform: embyLogs[0].osPlatform,
+          framework: embyLogs[0].framework,
+          processorCount: embyLogs[0].processorCount,
+          parsedLineCount: embyLogs[0].parsedLineCount
+        } : null,
         transcodeLogs: [{
           ffmpegLog: orphan,
           correlationConfidence: 100,
