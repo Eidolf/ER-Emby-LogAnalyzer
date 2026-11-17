@@ -19,7 +19,11 @@ class TimelineBuilder {
           source: 'Emby Server',
           type: ev.type,
           level: 'Info',
-          details: ev.details
+          details: ev.details,
+          positionMs: ev.positionMs,
+          durationMs: ev.durationMs,
+          lineNumber: ev.lineNumber,
+          association: ev.association
         });
       }
     }

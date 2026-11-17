@@ -143,21 +143,21 @@ class RootCauseAnalyzer {
 
       if (overallStatus === 'Success') {
         primaryRootCause = {
-          title: 'Playback Successful',
+          title: 'No failure detected in supplied logs',
           cause: session.playMethod === 'DirectPlay'
-            ? 'Media was streamed directly without transcoding. No critical issues detected.'
-            : 'Media was transcoded and streamed smoothly to the client.',
+            ? 'Reported Direct Play; no matching failure detected in the supplied logs.'
+            : `Analysis playback classification: ${session.playMethod || 'Unknown'}. No matching failure detected in the supplied logs.`,
           category: 'Playback',
           confidence: 99,
           severity: 'Success',
-          explanation: 'The session completed normally with no fatal errors detected in either Emby or FFmpeg logs.',
+          explanation: 'No fatal error was detected. This does not establish natural track completion, a successful next-track transition or complete log coverage.',
           evidence: [
             `PlayMethod: ${session.playMethod}`,
             `Client: ${session.clientDevice || 'Unknown'}`,
             `User: ${session.user || 'Unknown'}`
           ],
           recommendations: [
-            'No remediation needed. Everything operated as expected.'
+            'Check playback-stop, session-end and next-track evidence before concluding that album playback completed.'
           ]
         };
       } else {
@@ -191,21 +191,21 @@ class RootCauseAnalyzer {
       // Clean playback session
       overallStatus = 'Success';
       primaryRootCause = {
-        title: 'Playback Successful',
+        title: 'No failure detected in supplied logs',
         cause: session.playMethod === 'DirectPlay' 
-          ? 'Media was streamed directly without transcoding. No critical issues detected.'
-          : 'Media was transcoded and streamed smoothly to the client.',
+          ? 'Reported Direct Play; no matching failure detected in the supplied logs.'
+          : `Analysis playback classification: ${session.playMethod || 'Unknown'}. No matching failure detected in the supplied logs.`,
         category: 'Playback',
         confidence: 99,
         severity: 'Success',
-        explanation: 'The session completed normally with no fatal errors detected in either Emby or FFmpeg logs.',
+        explanation: 'No fatal error was detected. This does not establish natural track completion, a successful next-track transition or complete log coverage.',
         evidence: [
           `PlayMethod: ${session.playMethod}`,
           `Client: ${session.clientDevice || 'Unknown'}`,
           `User: ${session.user || 'Unknown'}`
         ],
         recommendations: [
-          'No remediation needed. Everything operated as expected.'
+          'Check playback-stop, session-end and next-track evidence before concluding that album playback completed.'
         ]
       };
     }
@@ -218,6 +218,22 @@ class RootCauseAnalyzer {
       playMethod: session.playMethod,
       startTime: session.startTime,
       stopTime: session.stopTime,
+      playbackEvidence: {
+        embySessionId: session.sessionId || null,
+        playSessionId: session.playSessionId || null,
+        mediaSourceId: session.mediaSourceId || null,
+        deviceId: session.deviceId || null,
+        clientApplication: session.clientApplication || null,
+        reportedPlayMethod: session.reportedPlayMethod || null,
+        sourceFile: session.sourceEmbyFile || null,
+        playbackStopReported: (session.events || []).some(event => event.type === 'PLAYBACK_STOP'),
+        sessionEndReported: (session.events || []).some(event => event.type === 'SESSION_ENDED'),
+        naturalCompletion: 'not-established',
+        events: (session.events || []).filter(event => [
+          'PLAYBACK_START', 'PLAYBACK_PROGRESS', 'PLAYBACK_PAUSE', 'PLAYBACK_UNPAUSE',
+          'PLAYLIST_MOVE', 'PLAYBACK_STOP', 'SESSION_ENDED', 'NETWORK_EVENT', 'AUDIO_HTTP_RESPONSE'
+        ].includes(event.type))
+      },
       connection: session.connection || null,
       overallStatus,
       primaryRootCause,

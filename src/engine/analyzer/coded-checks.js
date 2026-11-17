@@ -621,22 +621,22 @@ class CodedChecksEngine {
 
   // --- 23. CheckAndroidOs ---
   static checkAndroidOs(session, ctx, findings) {
-    const devStr = session.clientDevice || '';
-    const match = devStr.match(/Android\s*(\d+)/i) || (session.events.find(e => (e.details || '').includes('Android')) || {}).details?.match(/Android\s*(\d+)/i);
+    const sources = [session.clientDevice || '', ...session.events.map(event => event.details || '')];
+    const match = sources.map(source => source.match(/\b(?:Client\s+OS|Operating\s+System)\s*[:=]\s*Android\s+(\d+)/i)).find(Boolean);
     if (match) {
       const ver = parseInt(match[1], 10);
       if (ver <= 8) {
         findings.push({
           ruleId: 'CheckAndroidOs',
           category: 'OS',
-          title: 'Legacy Android OS Version Detected',
-          rootCause: `Client running Android ${ver}, which lacks modern AndroidX Media3 / ExoPlayer codecs.`,
-          severity: 'Warning',
+          title: 'Legacy Android OS Version Reported',
+          rootCause: `An explicit client OS label in the logs reports Android ${ver}.`,
+          severity: 'Info',
           confidence: 88,
-          explanation: `Android ${ver} has known TLS cipher suite limitations and lacks hardware support for VP9 Profile 2 / AV1 decoding.`,
+          explanation: 'An OS version is environment context, not evidence of an audio decoder, TLS or queue-transition failure. Android application versions are not Android OS versions.',
           evidence: [`Client OS: Android ${ver}`],
           recommendations: [
-            'Update client device to Android 10 or newer if firmware is available.'
+            'Check client logs and supported OS requirements before attributing a playback failure to the reported OS version.'
           ]
         });
       }

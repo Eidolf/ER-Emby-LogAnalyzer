@@ -17,7 +17,7 @@ class AIExplainer {
       const { overallStatus, primaryRootCause, mediaItem, user, clientDevice, playMethod } = analysisReport;
 
       if (overallStatus === 'Success') {
-        return `Playback of "${mediaItem || 'media'}" by user ${user || 'Admin'} on ${clientDevice || 'the client'} was completed without any disruptions using ${playMethod}. FFmpeg and Emby Server logs confirm that streams opened and closed cleanly.`;
+        return `No failure was detected in the supplied logs for "${mediaItem || 'media'}" by user ${user || 'Admin'} on ${clientDevice || 'the client'}. Analysis playback classification: ${playMethod || 'Unknown'}. This does not establish natural track completion, uninterrupted playback or a successful next-track transition.`;
       }
 
       const conf = primaryRootCause.confidence || 90;
@@ -51,7 +51,7 @@ class AIExplainer {
     return `### Server Fleet Log Analysis Overview\n` +
       `- Overall Health State: **${overallHealth}**\n` +
       `- Total Playback Sessions: **${metrics.totalSessions}**\n` +
-      `- Successful Streams: **${metrics.successCount}**\n` +
+      `- Sessions Without Detected Failure: **${metrics.successCount}**\n` +
       `- Warnings (e.g. Disconnects/Timeouts): **${metrics.warningCount}**\n` +
       `- Errors / Hardware Crashes: **${metrics.errorCount + metrics.criticalCount}**\n\n` +
       `Review individual session tabs below to inspect root-cause chains and actionable troubleshooting advice.`;

@@ -221,15 +221,15 @@
       "Response completed after client disconnected"
     ],
     "target": "all",
-    "title": "Audio Stream Buffer Starvation / High Transfer Latency",
-    "rootCause": "Direct streaming FLAC audio transfer took up to 75-87 seconds to download from the server, causing playback buffer exhaustion on the mobile client.",
-    "severity": "Warning",
+    "title": "Audio Transfer / Client Disconnect Observation",
+    "rootCause": "A transfer-duration or response-after-disconnect message was reported. This alone does not establish a playback buffer failure.",
+    "severity": "Info",
     "confidence": 92,
-    "explanation": "When direct streaming lossless audio (FLAC), the client requests whole track files. The Emby server logged HTTP response times exceeding 75,000ms for ~19MB FLAC tracks, indicating mobile network throttling, poor cellular signal, or server upload constraints. The playback position caught up with the buffered bytes before the file finished transferring.",
+    "explanation": "HTTP response duration can include normal streaming time and is not a measurement of startup delay, throughput or the client buffer. A disconnect can follow a user stop, track transition, app lifecycle change or transport failure; the cause requires additional evidence.",
     "recommendations": [
-      "In the Emby Android App (under Settings -> Playback -> Audio), set a maximum audio streaming bitrate or enable audio transcoding (e.g. Opus/AAC 320kbps) when outside the local network.",
-      "Check uplink bandwidth and mobile signal stability between the client and server.",
-      "Check if Cloudflare or external proxy restricts large sustained HTTP/2 FLAC downloads."
+      "Compare HTTP status, range requests, cancellation and response duration with the media runtime.",
+      "Collect playback progress, stop reports, next-track requests and client logs around the transition.",
+      "Compare the same tracks across annotated mobile, WLAN and Android Auto scenarios before attributing a cause."
     ]
   },
   {

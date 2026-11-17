@@ -12,65 +12,136 @@
     <div class="brand-section">
       <img src="../../assets/logo.png" alt="Emby Log Analyzer Logo" class="app-logo">
       <h1 class="app-title">Emby Log Analyzer</h1>
-      <span class="app-badge">v0.0.3</span>
+      <span class="app-badge">v0.0.5</span>
     </div>
     <div class="header-actions">
-      <button id="btnExportHtml" class="btn" disabled>Export HTML</button>
-      <button id="btnExportMarkdown" class="btn" disabled>Export Markdown</button>
-      <button id="btnExportJson" class="btn" disabled>Export JSON</button>
+      <div class="export-actions" role="group" aria-label="Export diagnostic report">
+        <span class="action-label">Export report</span>
+        <button id="btnExportHtml" class="btn" disabled>HTML</button>
+        <button id="btnExportMarkdown" class="btn" disabled>Markdown</button>
+        <button id="btnExportJson" class="btn" disabled>JSON</button>
+      </div>
+      <button id="btnOpenSettings" class="btn settings-trigger" aria-haspopup="dialog" aria-controls="settingsDialog">
+        <span aria-hidden="true">⚙</span> Settings
+      </button>
     </div>
   </header>
 
-  <!-- Container -->
   <div class="app-container">
-    <!-- Left Sidebar: File Ingestion & Sample Scenarios -->
     <aside class="sidebar">
-      <div id="dropZone" class="drop-zone">
-        <div class="drop-icon">📂</div>
-        <h4>Drag & Drop Logs Here</h4>
-        <p>embyserver*.txt, ffmpeg-transcode-*.txt</p>
-        <button id="btnBrowseFiles" class="btn">Browse Files</button>
-      </div>
-
-      <div class="sample-selector">
-        <label for="sampleSelect">Quick Load Test Scenario</label>
-        <select id="sampleSelect">
-          <option value="" selected disabled>-- Select Test Scenario --</option>
-          <option value="01-direct-play-success">01 - Direct Play (Success)</option>
-          <option value="02-hardware-transcode-nvenc-success">02 - NVENC Hardware Transcode (Success)</option>
-          <option value="03-failed-transcode-nvenc-driver-crash">03 - NVENC Driver Crash (Error)</option>
-          <option value="04-network-client-disconnect">04 - Network Client Disconnect (Warning)</option>
-          <option value="05-storage-disk-full">05 - Storage Cache Disk Full (Critical)</option>
-          <option value="06-corrupted-media-container">06 - Corrupt Media Container (Error)</option>
-          <option value="07-permission-denied-transcode-temp">07 - Transcode Temp Permission Denied (Error)</option>
-          <option value="08-qsv-hardware-failure">08 - Intel QuickSync / VAAPI Failure (Error)</option>
-        </select>
+      <nav class="diagnosis-navigation" aria-label="Diagnosis paths">
+        <h2 class="sidebar-section-title">Start a diagnosis</h2>
+        <button class="btn" type="button" data-guide-action="server">Playback logs / no device access</button>
+        <button class="btn" type="button" data-guide-action="mobile">Mobile device test</button>
+        <button class="btn" type="button" data-guide-action="comparison">Compare API captures</button>
+        <button id="btnReviewFindings" class="btn" type="button" data-guide-action="results" disabled>Review findings / next steps</button>
+      </nav>
+      <div class="sidebar-group">
+        <h2 class="sidebar-section-title">Log input</h2>
+        <div id="dropZone" class="drop-zone">
+          <div class="drop-icon" aria-hidden="true">⇧</div>
+          <h3>Drop log files to begin</h3>
+          <p>Emby Server and FFmpeg logs</p>
+          <button id="btnBrowseFiles" class="btn">Browse files</button>
+        </div>
       </div>
 
       <div class="file-list-container">
         <div class="file-list-header">
-          <span>Staged Log Files</span>
-          <span id="fileCountBadge">0</span>
+          <span>Selected files</span>
+          <span id="fileCountBadge" aria-label="Selected file count">0</span>
         </div>
         <ul id="fileList" class="file-list"></ul>
       </div>
 
-      <button id="btnAnalyze" class="btn btn-primary" style="width: 100%; justify-content: center;" disabled>
-        Analyze Logs
+      <button id="btnAnalyze" class="btn btn-primary analyze-button" disabled>
+        Analyze logs
       </button>
     </aside>
 
-    <!-- Main Content: Diagnostics, Metrics, Sessions, and Timelines -->
     <main class="main-content" id="mainContent">
-      <!-- Empty Initial State -->
+      <section class="diagnosis-guide" aria-labelledby="diagnosisGuideTitle">
+        <p class="eyebrow">GUIDED DIAGNOSIS / READ-ONLY</p>
+        <h2 id="diagnosisGuideTitle">What would you like to investigate?</h2>
+        <p>Start with the evidence you can access. Add client logs or snapshots only when they help answer the next question. All analysis stays local; the app never controls playback or changes Emby settings.</p>
+        <details id="workflowServer" name="diagnosis-workflow" open>
+          <summary>1. Check playback logs without access to the device</summary>
+          <ol>
+            <li>Note the incident time and time zone. Collect the Emby server log and matching FFmpeg logs, if transcoding occurred.</li>
+            <li><strong>Choose a source:</strong> select local logs, or download them using a saved Emby connection. API log retrieval requires an administrator credential.</li>
+            <li>Analyze the files. Review server requests, responses and session findings. A playlist HTTP 200 does not prove audible playback.</li>
+            <li>If the client-side cause remains unknown, continue with the mobile device test. Server Debug logging is only needed for a short repeat when normal logs lack relevant request details.</li>
+          </ol>
+          <div class="emby-api-actions">
+            <button class="btn btn-primary" type="button" data-guide-action="local-logs">Select local server / FFmpeg logs</button>
+            <button class="btn" type="button" data-guide-action="server-logs">Load server logs via API</button>
+          </div>
+          <p id="workflowConnectionStatus" class="emby-api-note">API prerequisite: select or create a connection and save its API key in Settings. Local files need no connection.</p>
+        </details>
+        <details id="workflowMobile" name="diagnosis-workflow">
+          <summary>2. Test a mobile device / add Android evidence</summary>
+          <ol>
+            <li>Enable diagnostic logging in the Android app <strong>before</strong> testing. The server API cannot retrieve Android app logs.</li>
+            <li>Record network, app version, audio and video quality settings separately. Start with the same album and play at least three titles; record manual skips versus automatic transitions and exact times with the time zone.</li>
+            <li>Export the Android app log promptly and attach it below. Keep matching server logs selected to analyze both sources together; an Android-only analysis is also possible.</li>
+            <li>Review the client evidence and possible workarounds. Change one setting at a time, restart the app, repeat, and verify the actual requested audio bitrate in the new log. Keep the original value so you can restore it.</li>
+          </ol>
+          <div class="emby-api-actions">
+            <button class="btn btn-primary" type="button" data-guide-action="android-logs">Attach Android app log</button>
+            <button class="btn" type="button" data-guide-action="capture">Optional: capture A / B / C</button>
+          </div>
+          <p class="emby-api-note">A repeated container-parsing error with HLS recovery can suggest an audio-quality comparison, not a universal 4 Mbps fix. Higher audio limits may use more mobile data and are not sufficient for every source bitrate. Enable server Debug logging only if a specific evidence gap calls for it; disable it after the repeat.</p>
+        </details>
+        <details id="workflowComparison" name="diagnosis-workflow">
+          <summary>3. Compare API snapshots / test conditions</summary>
+          <ol>
+            <li>Select a saved connection with an API key in Settings. Session visibility depends on its permissions.</li>
+            <li>Start playback yourself. Enter a scenario label and observed network, launch surface and outcome.</li>
+            <li>Press Capture for each test point. Each capture fetches and saves its own snapshot; no manual snapshot step is required. With several sessions, select the intended one from that fresh response.</li>
+            <li>Review the differences and export the report before closing. Captures are memory-only, independent of the live snapshot, and do not replace historical server/client logs.</li>
+          </ol>
+          <div class="emby-api-actions">
+            <button class="btn" type="button" data-guide-action="connections">Configure Emby connection</button>
+            <button class="btn btn-primary" type="button" data-guide-action="capture">Open capture controls</button>
+          </div>
+        </details>
+        <p id="workflowStatus" class="emby-api-status" role="status" aria-live="polite">Choose a diagnosis path. Existing files, results and captures are kept when switching paths.</p>
+      </section>
+      <section id="embyApiSnapshot" class="emby-api-snapshot" aria-label="Read-only Emby API snapshot" hidden></section>
+      <section id="embyScenarioComparison" class="emby-api-snapshot" aria-label="Manual scenario comparison" hidden></section>
+      <details id="embyScenarioControls" class="scenario-capture-panel">
+        <summary>Capture A / B / C scenario</summary>
+        <p class="emby-api-note">Each capture fetches a fresh read-only snapshot using the selected saved connection, then stores it for comparison. No separate live-snapshot step. Up to six in-memory captures; network, start surface and outcome are administrator annotations.</p>
+        <div class="scenario-fields">
+          <label for="embyScenarioLabel">Scenario label</label>
+          <input id="embyScenarioLabel" type="text" maxlength="80" value="A">
+          <div id="embyScenarioSessionChoice" class="scenario-session-choice" hidden>
+            <label for="embyScenarioSession">Session in the fresh snapshot</label>
+            <select id="embyScenarioSession" disabled><option value="">Choose a session to save this capture</option></select>
+            <p>More than one session was returned. Choose the intended session; the capture is saved immediately after selection. “No selected session” is not proof of session termination.</p>
+            <button id="btnCancelScenarioChoice" class="btn" type="button">Discard this fetch</button>
+          </div>
+          <label for="embyScenarioNetwork">Network annotation</label>
+          <select id="embyScenarioNetwork"><option value="unknown">Unknown</option><option value="mobile">Mobile</option><option value="wifi">WLAN / Wi-Fi</option></select>
+          <label for="embyScenarioSurface">Playback start surface</label>
+          <select id="embyScenarioSurface"><option value="unknown">Unknown</option><option value="phone">Phone UI</option><option value="android-auto">Android Auto UI</option></select>
+          <label for="embyScenarioOutcome">Observed outcome</label>
+          <select id="embyScenarioOutcome"><option value="unknown">Unknown / in progress</option><option value="working">Working</option><option value="stalled">Stalled</option></select>
+        </div>
+        <div class="emby-api-actions">
+          <button id="btnCaptureEmbyScenario" class="btn btn-primary" disabled>Capture scenario</button>
+          <button id="btnClearEmbyScenarios" class="btn" disabled>Clear captures</button>
+        </div>
+        <p id="embyScenarioStatus" class="emby-api-status" role="status" aria-live="polite">Open Settings and select a saved Emby connection to capture.</p>
+      </details>
+
       <div id="emptyState" class="empty-state">
-        <div class="empty-state-icon">📊</div>
-        <h2>Ready for Log Analysis</h2>
-        <p>Select or drag & drop Emby Server and FFmpeg transcode logs to diagnose playback, transcoding, and streaming issues.</p>
+        <div class="empty-state-icon" aria-hidden="true"><i></i><i></i><i></i></div>
+        <h2>No evidence loaded yet</h2>
+        <p>Choose a diagnosis path above. You can start with local logs, download server logs, attach Android evidence or capture an API snapshot.</p>
       </div>
 
-      <!-- Analysis Results Dashboard (Hidden until analyzed) -->
-      <div id="resultsDashboard" style="display: none; display: flex; flex-direction: column; gap: 20px;">
+      <div id="resultsDashboard" style="display: none; flex-direction: column; gap: 20px;">
         <!-- Metrics -->
         <div class="metrics-row">
           <div class="metric-card">
@@ -100,8 +171,39 @@
           <div class="briefing-header">
             <span>✨ Privacy-First Local AI Diagnostic Briefing</span>
           </div>
+          <details id="unassignedPlaybackPanel" class="emby-api-snapshot" hidden>
+            <summary>Unassigned playback/transport evidence</summary>
+            <p class="emby-api-note">These events could not be safely assigned to a track. The first 100 are shown here; JSON exports retain all extracted events.</p>
+            <div id="unassignedPlaybackEvents"></div>
+          </details>
           <div class="briefing-body" id="aiBriefingText">Analyzing...</div>
         </div>
+
+        <section id="clientLogGuidance" class="emby-api-snapshot client-log-guidance" hidden aria-labelledby="clientLogGuidanceTitle">
+          <h3 id="clientLogGuidanceTitle" tabindex="-1">Evidence and next steps</h3>
+          <p id="clientLogGuidanceText"></p>
+          <section id="androidPlaybackAdvice" class="playback-advice" hidden aria-labelledby="androidPlaybackAdviceTitle">
+            <h4 id="androidPlaybackAdviceTitle"></h4>
+            <p id="androidPlaybackAdviceExplanation"></p>
+            <ul id="androidPlaybackAdviceObservations"></ul>
+            <h4>Next steps / possible workaround</h4>
+            <ol id="androidPlaybackAdviceSteps"></ol>
+            <p id="androidPlaybackAdviceScope" class="emby-api-note"></p>
+          </section>
+          <details>
+            <summary>Server request evidence (latest 100 events)</summary>
+            <div id="serverPlaybackEvents" class="client-log-events"></div>
+          </details>
+          <details>
+            <summary>Android client evidence (latest 100 events)</summary>
+            <div id="clientLogEvents" class="client-log-events"></div>
+          </details>
+          <div class="emby-api-actions">
+            <button id="btnAddAndroidClientLog" class="btn" type="button">Attach Android app log</button>
+            <button class="btn" type="button" data-guide-action="mobile">Open mobile test guide</button>
+          </div>
+          <p id="clientLogStatus" class="emby-api-status" role="status" aria-live="polite"></p>
+        </section>
 
         <!-- Submenu Tabs: Sessions vs Visual Playback Timeline -->
         <div class="view-tabs-bar" style="display: flex; gap: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
@@ -150,6 +252,64 @@
     </main>
   </div>
 
+  <dialog id="settingsDialog" class="settings-dialog" aria-labelledby="settingsTitle">
+    <form method="dialog" class="settings-header">
+      <div>
+        <p class="eyebrow">APPLICATION SETTINGS</p>
+        <h2 id="settingsTitle">Emby connections</h2>
+      </div>
+      <button id="btnCloseSettings" class="icon-button" aria-label="Close settings">×</button>
+    </form>
+    <div class="settings-body">
+      <section class="settings-section" aria-labelledby="connectionsSectionTitle">
+        <h3 id="connectionsSectionTitle">Connection profiles</h3>
+        <p class="settings-description">Manage server addresses and API keys here. Snapshot requests are manual and read-only.</p>
+        <label for="embyConnectionSelect">Saved connection</label>
+        <div class="connection-select-row">
+          <select id="embyConnectionSelect"><option value="">New connection</option></select>
+          <button id="btnNewEmbyConnection" class="btn" type="button">New</button>
+        </div>
+        <label for="embyConnectionName">Connection name</label>
+        <input id="embyConnectionName" type="text" maxlength="80" placeholder="Home server">
+        <label for="embyApiUrl">Server URL</label>
+        <input id="embyApiUrl" type="url" value="http://localhost:8096/emby" autocomplete="url">
+        <label for="embyApiToken">API key or access token</label>
+        <input id="embyApiToken" type="password" autocomplete="new-password" placeholder="Not shown after saving">
+        <label class="settings-check"><input id="embyClearSavedToken" type="checkbox" disabled> Forget the saved API key</label>
+        <div id="embyCredentialStorage" class="storage-notice" role="status"></div>
+        <div class="settings-options">
+          <label class="settings-check"><input id="embyIncludeSystemInfo" type="checkbox"> Include system status</label>
+          <label class="settings-check"><input id="embyIncludeActivityLog" type="checkbox"> Include first 50 activity entries (admin permission)</label>
+        </div>
+        <div class="emby-api-actions">
+          <button id="btnTestEmbyConnection" class="btn" type="button">Test public URL</button>
+          <button id="btnSaveEmbyConnection" class="btn btn-primary" type="button">Save connection</button>
+          <button id="btnDeleteEmbyConnection" class="btn" type="button" disabled>Delete connection</button>
+        </div>
+        <p id="embyApiStatus" class="emby-api-status" role="status" aria-live="polite">No connection selected.</p>
+      </section>
+      <section class="settings-section snapshot-settings" aria-labelledby="snapshotSettingsTitle">
+        <h3 id="snapshotSettingsTitle">Manual snapshot</h3>
+        <p class="settings-description">Fetches one point-in-time snapshot. No polling, playback controls or server changes.</p>
+        <div class="emby-api-actions">
+          <button id="btnFetchEmbySnapshot" class="btn btn-primary" type="button">Fetch snapshot</button>
+          <button id="btnClearEmbySnapshot" class="btn" type="button" disabled>Clear current snapshot</button>
+        </div>
+      </section>
+      <section class="settings-section server-logs-settings" aria-labelledby="serverLogsTitle">
+        <h3 id="serverLogsTitle">Server logs</h3>
+        <p class="settings-description">Lists and downloads Emby/FFmpeg logs using authenticated GET requests. Emby requires an administrator credential. Files stay local in temporary storage until the app closes; logs can contain API keys and private details.</p>
+        <div class="emby-api-actions">
+          <button id="btnListServerLogs" class="btn" type="button" disabled>List server logs</button>
+          <button id="btnDownloadServerLogs" class="btn btn-primary" type="button" disabled>Download selected &amp; analyze</button>
+        </div>
+        <div id="serverLogList" class="server-log-list" aria-label="Available Emby and FFmpeg logs"></div>
+        <p id="serverLogStatus" class="emby-api-status" role="status" aria-live="polite">Select a saved connection with administrator permission to list logs.</p>
+      </section>
+    </div>
+  </dialog>
+
+  <script src="../shared/snapshot-comparison.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

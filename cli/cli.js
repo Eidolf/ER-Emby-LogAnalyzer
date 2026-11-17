@@ -8,7 +8,7 @@ const args = process.argv.slice(2);
 
 function printHelp() {
   console.log(`
-Emby Log Analyzer CLI (v1.0.0)
+Emby Log Analyzer CLI (v0.0.5)
 Usage: emby-log-analyzer [options] <log_files_or_directories...>
 
 Options:
@@ -44,7 +44,7 @@ async function main() {
     } else if (arg === '-c' || arg === '--custom-kb') {
       customKbPath = args[++i];
     } else if (arg === '-v' || arg === '--version') {
-      console.log('1.0.0');
+      console.log('0.0.5');
       process.exit(0);
     } else {
       inputPaths.push(arg);

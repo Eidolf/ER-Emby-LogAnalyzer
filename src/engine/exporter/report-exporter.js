@@ -1,4 +1,5 @@
 const fs = require('fs');
+const SnapshotComparison = require('../../shared/snapshot-comparison');
 
 /**
  * Report exporter supporting Markdown, HTML, JSON, and PDF (printable HTML).
@@ -15,16 +16,30 @@ class ReportExporter {
    * Export diagnostic batch results to Markdown.
    */
   static toMarkdown(analysisResult) {
+    const comparison = analysisResult.snapshotComparison
+      ? ReportExporter.sectionsToMarkdown(ReportExporter.comparisonSections(analysisResult.snapshotComparison)) : '';
+    if (['emby-api-snapshot', 'emby-api-comparison'].includes(analysisResult.reportType)) {
+      return (analysisResult.embySnapshot ? ReportExporter.apiSnapshotToMarkdown(analysisResult.embySnapshot) : '') + comparison;
+    }
     const { overallHealth, metrics, sessions, analyzedAt } = analysisResult;
     let md = `# Emby Log Analyzer Diagnostic Report\n\n`;
     md += `*Generated on: ${analyzedAt}*\n\n`;
     md += `## Fleet Overview\n\n`;
-    md += `- **Overall Status**: ${overallHealth}\n`;
+    md += `- **Overall Status**: ${analysisResult.clientLogSummary?.filesCount && !sessions.length ? 'Not assessed (no server playback sessions)' : overallHealth}\n`;
     md += `- **Total Sessions**: ${metrics.totalSessions}\n`;
     md += `- **Successful Playbacks**: ${metrics.successCount}\n`;
     md += `- **Warnings**: ${metrics.warningCount}\n`;
     md += `- **Errors / Transcode Failures**: ${metrics.errorCount}\n`;
     md += `- **Critical Outages**: ${metrics.criticalCount}\n\n`;
+
+    if (analysisResult.embySnapshot) {
+      md += ReportExporter.apiSnapshotToMarkdown(analysisResult.embySnapshot);
+    }
+    md += comparison;
+    md += ReportExporter.sectionsToMarkdown(ReportExporter.playbackEvidenceSections(analysisResult));
+    md += ReportExporter.sectionsToMarkdown(ReportExporter.serverPlaybackEvidenceSections(analysisResult));
+    md += ReportExporter.sectionsToMarkdown(ReportExporter.clientLogSections(analysisResult));
+    md += ReportExporter.sectionsToMarkdown(ReportExporter.androidGuidanceSections(analysisResult));
 
     md += `## Detailed Session Analysis\n\n`;
 
@@ -81,6 +96,11 @@ class ReportExporter {
    * Export diagnostic batch results to polished HTML.
    */
   static toHTML(analysisResult) {
+    const comparison = analysisResult.snapshotComparison
+      ? ReportExporter.sectionsToHTML(ReportExporter.comparisonSections(analysisResult.snapshotComparison)) : '';
+    if (['emby-api-snapshot', 'emby-api-comparison'].includes(analysisResult.reportType)) {
+      return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Emby API Evidence</title></head><body>${analysisResult.embySnapshot ? ReportExporter.apiSnapshotToHTML(analysisResult.embySnapshot) : ''}${comparison}</body></html>`;
+    }
     const { overallHealth, metrics, sessions, analyzedAt } = analysisResult;
     const statusColor = {
       Success: '#10b981',
@@ -165,6 +185,10 @@ class ReportExporter {
       `;
     }
 
+    const embyApiSnapshotHtml = analysisResult.embySnapshot
+      ? ReportExporter.apiSnapshotToHTML(analysisResult.embySnapshot)
+      : '';
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -215,7 +239,7 @@ class ReportExporter {
   <div class="container">
     <div class="header-bar">
       <h1>Emby Log Analyzer Diagnostic Report</h1>
-      <p class="meta">Generated: ${analyzedAt} | Fleet Health: <strong>${overallHealth}</strong></p>
+      <p class="meta">Generated: ${analyzedAt} | Fleet Health: <strong>${analysisResult.clientLogSummary?.filesCount && !sessions.length ? 'Not assessed (no server playback sessions)' : overallHealth}</strong></p>
     </div>
     <div class="metrics-grid">
       <div class="metric-card"><div>Total Sessions</div><div class="metric-num">${metrics.totalSessions}</div></div>
@@ -223,6 +247,12 @@ class ReportExporter {
       <div class="metric-card"><div>Warnings</div><div class="metric-num" style="color:#f59e0b">${metrics.warningCount}</div></div>
       <div class="metric-card"><div>Errors / Crashes</div><div class="metric-num" style="color:#ef4444">${metrics.errorCount + metrics.criticalCount}</div></div>
     </div>
+    ${embyApiSnapshotHtml}
+    ${comparison}
+    ${ReportExporter.sectionsToHTML(ReportExporter.playbackEvidenceSections(analysisResult))}
+    ${ReportExporter.sectionsToHTML(ReportExporter.serverPlaybackEvidenceSections(analysisResult))}
+    ${ReportExporter.sectionsToHTML(ReportExporter.clientLogSections(analysisResult))}
+    ${ReportExporter.sectionsToHTML(ReportExporter.androidGuidanceSections(analysisResult))}
     <h2>Session Diagnostic Breakdowns</h2>
     ${sessionCards}
   </div>
@@ -237,6 +267,235 @@ class ReportExporter {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  static apiSnapshotSections(snapshot) {
+    const server = snapshot.server || {};
+    const sessions = Array.isArray(snapshot.sessions) ? snapshot.sessions : [];
+    const sections = [{
+      title: 'Server and collection',
+      rows: [
+        ['Captured at', snapshot.capturedAt],
+        ['Scope', 'Point-in-time API data. Not a live monitor or log-derived root cause. No automatic refresh.'],
+        ['Server', server.name],
+        ['Server ID', server.id],
+        ['Version', server.version],
+        ['Operating system', server.operatingSystemDisplayName || server.operatingSystem],
+        ['Pending restart', server.hasPendingRestart],
+        ['Shutting down', server.isShuttingDown],
+        [snapshot.selectionScope ? 'Retained selected sessions' : 'Returned connected sessions', sessions.length],
+        ...(snapshot.selectionScope ? [
+          ['Selection scope', snapshot.selectionScope],
+          ['Sessions originally returned by API', snapshot.returnedSessionCount]
+        ] : []),
+        ...Object.entries(snapshot.endpointStatus || {}).map(([name, result]) =>
+          [`Endpoint ${name}`, `${result.status}${result.error ? `: ${result.error}` : ''}`]),
+        ...(snapshot.warnings || []).map(warning => ['Warning', warning])
+      ]
+    }];
+    if (snapshot.summary) {
+      const summary = snapshot.summary;
+      sections[0].rows.push(
+        ['Playing / paused / idle', `${summary.playing} / ${summary.paused} / ${summary.idle}`],
+        ['Playback state unknown', summary.playbackStateUnknown],
+        ['Sessions with transcode info', summary.transcodes],
+        ['Reported hardware / software video encoding', `${summary.hardwareVideo} / ${summary.softwareVideo} (copied video excluded; missing flags are unknown)`]
+      );
+    }
+    for (const session of sessions) {
+      const transcode = session.transcodingInfo || {};
+      sections.push({
+        title: session.mediaItem?.name || 'No current media item',
+        rows: [
+          ['Session ID', session.id],
+          ['User', session.userName],
+          ['Client / device', [session.client, session.deviceName].filter(Boolean).join(' / ')],
+          ['Application version', session.applicationVersion],
+          ['Device type', session.deviceType],
+          ['Device ID', session.deviceId],
+          ['Remote endpoint', session.remoteEndPoint],
+          ['Last activity', session.lastActivityDate],
+          ['Playback state', !session.mediaItem ? 'Idle' : session.playState?.isPaused === true ? 'Paused'
+            : session.playState?.isPaused === false ? 'Playing' : 'Unknown'],
+          ['Playback method', session.playState?.playMethod],
+          ['Position (ticks)', session.playState?.positionTicks],
+          ['Media source ID', session.playState?.mediaSourceId],
+          ['Selected audio stream index', session.playState?.audioStreamIndex],
+          ['Playback source container', session.mediaSource?.container],
+          ['Playback source audio streams', SnapshotComparison.audioDescription(session.mediaSource?.audioStreams)],
+          ['Item audio streams (metadata candidates)', SnapshotComparison.audioDescription(session.mediaItem?.audioStreams)],
+          ['Playlist item ID', session.playlist?.itemId],
+          ['Playlist index / length (raw)', `${session.playlist?.index ?? '?'} / ${session.playlist?.length ?? '?'}`],
+          ['Repeat / shuffle / sleep timer', `${session.playState?.repeatMode ?? '?'} / ${session.playState?.shuffle ?? '?'} / ${session.playState?.sleepTimerMode ?? '?'}`],
+          ['Transcode codecs', [transcode.videoCodec, transcode.audioCodec].filter(Boolean).join(' / ')],
+          ['Video encoder', transcode.videoEncoder],
+          ['Transcode reasons (server reported)', (transcode.transcodeReasons || []).join(', ')],
+          ...(session.diagnostics || []).map(detail => ['Transcode observation', detail])
+        ]
+      });
+    }
+    if (snapshot.activityLog) {
+      const activity = snapshot.activityLog;
+      sections.push({
+        title: 'Recent server activity',
+        rows: [
+          ['Scope', `Showing ${activity.entries.length} of ${activity.totalRecordCount ?? 'unknown'} entries; requested limit ${activity.limit}. No pagination or historical completeness guarantee.`],
+          ...activity.entries.map(entry => [
+            [entry.date, entry.severity, entry.type, entry.id ? `ID ${entry.id}` : null].filter(Boolean).join(' / ') || 'Entry',
+            [entry.name, entry.itemId ? `ItemId=${entry.itemId}` : null, entry.userId ? `UserId=${entry.userId}` : null].filter(Boolean).join(' / ')
+          ])
+        ]
+      });
+    }
+    return sections;
+  }
+
+  static apiSnapshotToMarkdown(snapshot) {
+    return '## Live Emby API Snapshot (read-only)\n\n'
+      + ReportExporter.sectionsToMarkdown(ReportExporter.apiSnapshotSections(snapshot));
+  }
+
+  static sectionsToMarkdown(sections) {
+    const clean = value => String(value ?? 'N/A')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/[\r\n]/g, ' ').replace(/[\\`*_[\]()#!|]/g, '\\$&');
+    let md = '';
+    for (const section of sections) {
+      md += `### ${clean(section.title)}\n\n`;
+      for (const [label, value] of section.rows) md += `- **${clean(label)}**: ${clean(value)}\n`;
+      md += '\n';
+    }
+    return md;
+  }
+
+  static apiSnapshotToHTML(snapshot) {
+    return '<section><h2>Live Emby API Snapshot (read-only)</h2>'
+      + ReportExporter.sectionsToHTML(ReportExporter.apiSnapshotSections(snapshot)) + '</section>';
+  }
+
+  static sectionsToHTML(sections) {
+    const escape = value => ReportExporter.escapeHtml(String(value ?? 'N/A'));
+    return sections.map(section =>
+        `<div class="card"><h3>${escape(section.title)}</h3><ul>${
+          section.rows.map(([label, value]) => `<li><strong>${escape(label)}:</strong> ${escape(value)}</li>`).join('')
+        }</ul></div>`        ).join('');
+  }
+
+  static comparisonSections(comparison) {
+    return [{
+        title: 'Manual scenario comparison',
+        rows: [
+          ['Scope', comparison.scope],
+          ...comparison.correlations.map(correlation => [
+            `${comparison.captures[correlation.from].label} to ${comparison.captures[correlation.to].label}`,
+            correlation.observation
+          ]),
+          ...comparison.rows.map(row => [
+            `${row.field} (${row.status})`,
+            row.values.map((value, index) => `${comparison.captures[index].label}: ${value ?? 'Unknown / not supplied'}`).join(' | ')
+          ])
+        ]
+    }, ...comparison.captures.flatMap(capture =>
+        ReportExporter.apiSnapshotSections(capture.snapshot).map(section => ({
+          ...section, title: `${capture.label}: ${section.title}`
+        })))];
+  }
+
+  static playbackEvidenceSections(report) {
+    const sections = [];
+    for (const session of report.sessions || []) {
+        const evidence = session.playbackEvidence;
+        if (!evidence) continue;
+        sections.push({
+          title: `Playback lifecycle evidence: ${session.mediaItem || 'Unknown item'}`,
+          rows: [
+            ['Scope', 'Stop reports and session-end reports are distinct. Neither establishes natural completion or the next-track transition. Showing at most 100 events here; JSON retains all extracted events.'],
+            ['Server session ID', evidence.embySessionId],
+            ['PlaySessionId', evidence.playSessionId],
+            ['Media source ID', evidence.mediaSourceId],
+            ['Explicitly reported log play method', evidence.reportedPlayMethod],
+            ['Source file', evidence.sourceFile],
+            ['Playback stop reported', evidence.playbackStopReported],
+            ['Session end reported', evidence.sessionEndReported],
+            ['Natural completion', evidence.naturalCompletion],
+            ...evidence.events.slice(0, 100).map(event => [
+              `${event.timestamp} ${event.type} line ${event.lineNumber ?? '?'}`,
+              `${event.details}${event.positionMs != null ? ` / position=${event.positionMs}ms` : ''} / association=${event.association || 'start record'}`
+            ])
+          ]
+        });
+    }
+    const unassigned = report.unassignedPlaybackEvents || [];
+    if (unassigned.length) {
+        sections.push({
+          title: 'Unassigned playback/transport evidence',
+          rows: [
+            ['Scope', `${unassigned.length} events could not be safely assigned. Showing at most 100; JSON retains all. No assignment by username or nearest track.`],
+            ...unassigned.slice(0, 100).map(event => [`${event.timestamp} ${event.type} (${event.sourceFile}, line ${event.lineNumber ?? '?'})`, event.details])
+          ]
+        });
+    }
+    return sections;
+  }
+
+  static clientLogSections(report) {
+    const summary = report.clientLogSummary;
+    if (!summary?.filesCount) return [];
+    return [{
+      title: 'Android app log evidence',
+      rows: [
+        ['Files', summary.filesCount],
+        ['Recognized log lines', summary.recognizedLines],
+        ['Relevant events', summary.relevantEvents],
+        ['Error-level events', summary.errorEvents],
+        ['Events truncated', summary.eventsTruncated ? 'Yes; only retained events are shown and used for guidance' : 'No'],
+        ['Unsupported files', (summary.unsupportedFiles || []).join(', ') || 'None'],
+        ['Scope', 'Client log events are shown separately from server playback evidence. Time proximity alone does not establish causation.'],
+        ...(summary.events || []).slice(-100).map(event => [
+          `${event.timestamp || 'Time unknown'} ${event.level}/${event.component} (${event.sourceFile}, line ${event.lineNumber})`,
+          event.details
+        ])
+      ]
+    }];
+  }
+
+  static androidGuidanceSections(report) {
+    const guidance = report.androidPlaybackGuidance;
+    if (!guidance) return [];
+    return [{
+      title: guidance.title,
+      rows: [
+        ['Evidence guidance status', guidance.status],
+        ['Interpretation', guidance.explanation],
+        ...guidance.observations.map(value => ['Observation', value]),
+        ...guidance.evidence.map(event => [
+          `${event.timestamp} (${event.sourceFile}, line ${event.lineNumber})`, event.signal
+        ]),
+        ...guidance.nextSteps.map((value, index) => [`Next step ${index + 1}`, value]),
+        ['Limits', guidance.limitations]
+      ]
+    }];
+  }
+
+  static serverPlaybackEvidenceSections(report) {
+    const evidence = report.serverPlaybackEvidence;
+    if (!evidence) return [];
+    return [{
+      title: 'Emby audio request evidence',
+      rows: [
+        ['Server log files', evidence.filesCount ?? 'Unknown (older report)'],
+        ['Audio requests', evidence.audioRequests],
+        ['Audio responses', evidence.audioResponses],
+        ['Segment requests', evidence.audioSegmentRequests],
+        ['HTTP 4xx/5xx responses', evidence.nonSuccessAudioResponses],
+        ['Responses completed after client disconnect', evidence.clientDisconnectedResponses],
+        ['Scope', `${evidence.filesCount === 0 ? 'No server log included; zero counters are not evidence of absent requests. ' : ''}A server-side request and HTTP response do not prove that the client received or played the media. Showing at most 100 events.`],
+        ...(evidence.events || []).slice(-100).map(event => [
+          `${event.timestamp} ${event.type} (${event.sourceFile}, line ${event.lineNumber})`,
+          `${event.resourceKind} / ItemId=${event.itemId} / PlaySessionId=${event.playSessionId || 'unknown'}${event.httpStatus ? ` / HTTP ${event.httpStatus}` : event.responseOutcome === 'client-disconnected' ? ' / completed after client disconnect; HTTP status unknown' : ''}`
+        ])
+      ]
+    }];
   }
 }
 

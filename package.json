@@ -1,6 +1,6 @@
 {
   "name": "er-emby-loganalyzer",
-  "version": "0.0.3",
+  "version": "0.0.5",
   "description": "Cross-platform Emby Server and FFmpeg Log Analyzer & Diagnostics Tool",
   "main": "src/main/index.js",
   "bin": {
@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "electron . --no-sandbox",
-    "test": "node --test test/analyzer.test.js",
+    "test": "node --test test/analyzer.test.js test/emby-api-client.test.js test/emby-connection-store.test.js test/playback-log-evidence.test.js",
     "cli": "node cli/cli.js",
     "build:linux": "electron-builder --linux --publish never",
     "build:win": "electron-builder --win --publish never",

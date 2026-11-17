@@ -76,7 +76,6 @@ class LogAnalyzerEngine {
 
     // Analyze root causes
     const diagnosticReport = this.analyzer.analyzeAll(correlatedSessions, allEmbyErrors);
-
     // Attach local AI briefings
     diagnosticReport.briefing = AIExplainer.generateExplanation(diagnosticReport);
     for (const s of diagnosticReport.sessions) {
@@ -87,6 +86,8 @@ class LogAnalyzerEngine {
 
     return {
       ...diagnosticReport,
+      unassignedPlaybackEvents: embyLogs.flatMap(log =>
+        (log.unassignedPlaybackEvents || []).map(event => ({ ...event, sourceFile: log.filePath }))),
       filesSummary: {
         embyFilesCount: embyFiles.length,
         ffmpegFilesCount: ffmpegFiles.length,

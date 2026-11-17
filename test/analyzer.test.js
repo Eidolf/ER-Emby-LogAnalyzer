@@ -2,6 +2,8 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+const EmbyParser = require('../src/engine/parser/emby-parser');
 
 const LogAnalyzerEngine = require('../src/engine/index');
 const KnowledgeBase = require('../src/engine/kb/knowledge-base');
@@ -228,4 +230,115 @@ describe('Emby Log Analyzer Diagnostic Test Suite', () => {
     assert.ok(ruleIds.includes('CheckUserPolicy'), 'Should flag transcoding forbidden by user policy');
     assert.ok(ruleIds.includes('CheckParsedLineCount'), 'Should report diagnostic metrics line count');
   });
+});
+
+describe('Audio playback lifecycle evidence', () => {
+  function fixture(t, lines) {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'emby-playback-evidence-'));
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    const file = path.join(directory, 'embyserver.txt');
+    fs.writeFileSync(file, lines.join('\n'));
+    return file;
+  }
+
+  it('distinguishes stop and session end, retaining position, line and neutral HTTP evidence', async t => {
+    const file = fixture(t, [
+      '2026-11-16 20:00:00.000 Info App: User Test is playing Track 1.flac on Android. PlayMethod=DirectPlay, SessionId=transport, PlaySessionId=play-1',
+      '2026-11-16 20:00:06.000 Info Server: Response 206. Time: 6000.5ms. GET /emby/Audio/1/stream?PlaySessionId=play-1&api_key=never-export-this',
+      '2026-11-16 20:01:00.000 Info SessionManager: Playback progress: Position: 60000 ms. PlaySessionId: play-1',
+      '2026-11-16 20:01:01.000 Info SessionManager: Playback stopped reported by app Android. Position: 61s. PlaySessionId: play-1',
+      '2026-11-16 20:01:02.000 Info SessionManager: Session transport has ended'
+    ]);
+    const report = await new LogAnalyzerEngine().analyzeFiles([file]);
+    const evidence = report.sessions[0].playbackEvidence;
+    assert.equal(evidence.embySessionId, 'transport');
+    assert.equal(evidence.playSessionId, 'play-1');
+    assert.equal(evidence.playbackStopReported, true);
+    assert.equal(evidence.sessionEndReported, true);
+    assert.equal(evidence.naturalCompletion, 'not-established');
+    const response = evidence.events.find(event => event.type === 'AUDIO_HTTP_RESPONSE');
+    assert.equal(response.httpStatus, 206);
+    assert.equal(response.durationMs, 6000.5);
+    assert.equal(response.lineNumber, 2);
+    assert.equal(evidence.events.find(event => event.type === 'PLAYBACK_STOP').positionMs, 61000);
+    assert.equal(JSON.stringify(report).includes('never-export-this'), false);
+    assert.equal(report.sessions[0].timeline.some(event => event.type === 'AUDIO_BUFFER_LATENCY'), false);
+    assert.doesNotMatch(report.sessions[0].primaryRootCause.explanation, /session completed normally/i);
+    for (const format of ['html', 'markdown', 'json']) {
+      const exported = new LogAnalyzerEngine().exportReport(report, format);
+      assert.match(exported, /PLAYBACK_STOP/);
+      assert.match(exported, /SESSION_ENDED/);
+      assert.match(exported, /not-established/);
+    }
+  });
+
+  it('retains ambiguous and unknown-ID events without assigning them by username or nearest track', async t => {
+    const file = fixture(t, [
+      '2026-11-16 20:00:00.000 Info App: User Test is playing Track 1.flac on Phone. PlayMethod=DirectPlay, PlaySessionId=play-1',
+      '2026-11-16 20:00:01.000 Info App: User Test is playing Track 2.flac on TV. PlayMethod=DirectStream, PlaySessionId=play-2',
+      '2026-11-16 20:00:02.000 Info SessionManager: Playback stopped reported by client: User Test, Position: 2s',
+      '2026-11-16 20:00:03.000 Info SessionManager: Playback stopped. PlaySessionId=not-in-this-file',
+      '2026-11-16 20:00:04.000 Info Server: Response 200. Time: 85000ms. GET /emby/Audio/2/stream',
+      '2026-11-16 20:00:05.000 Info SessionManager: Playback progress: Position: 4s. PlaySessionId=not-in-this-file',
+      '2026-11-16 20:00:06.000 Info Server: Response 416. GET /emby/Audio/2/stream',
+      '2026-11-16 20:00:07.000 Info App: ffmpeg -i "/media/track2.flac" -c:a copy "/tmp/transcoding-temp/remux.m4a" PlaySessionId=play-2'
+    ]);
+    const parsed = await EmbyParser.parseFile(file);
+    assert.ok(parsed.sessions.every(session => session.sessionId === null));
+    assert.ok(parsed.sessions.every(session => session.stopTime === null));
+    assert.equal(parsed.unassignedPlaybackEvents.length, 5);
+    assert.equal(parsed.unassignedPlaybackEvents.at(-1).httpStatus, 416);
+    assert.equal(parsed.unassignedPlaybackEvents.at(-1).durationMs, null);
+    const report = await new LogAnalyzerEngine().analyzeFiles([file]);
+    assert.equal(report.unassignedPlaybackEvents.length, 5);
+    assert.ok(report.sessions.every(session => session.playbackEvidence.playbackStopReported === false));
+    const remux = report.sessions.find(session => session.playbackEvidence.playSessionId === 'play-2');
+    assert.equal(remux.playMethod, 'Transcode');
+    assert.equal(remux.playbackEvidence.reportedPlayMethod, 'DirectStream');
+    assert.match(new LogAnalyzerEngine().exportReport(report, 'html'), /Unassigned playback/);
+  });
+
+  it('does not default unreported play methods to Direct Play or missing ends to completed playback', async t => {
+    const file = fixture(t, [
+      '2026-11-16 20:00:00.000 Info App: Playback start reported by app Emby for Android 3.4 on Phone playing Track 1.flac. Position: 0 ms. PlaySessionId: only-play-id'
+    ]);
+    const report = await new LogAnalyzerEngine().analyzeFiles([file]);
+    const session = report.sessions[0];
+    assert.equal(session.playMethod, 'Unknown');
+    assert.equal(session.playbackEvidence.embySessionId, null);
+    assert.equal(session.playbackEvidence.clientApplication, 'Emby for Android 3.4');
+    assert.equal(session.playbackEvidence.playbackStopReported, false);
+    assert.equal(session.playbackEvidence.sessionEndReported, false);
+    assert.equal(session.playbackEvidence.events[0].positionMs, 0);
+    assert.equal(session.playbackEvidence.events[0].association, 'explicit PlaySessionId');
+    assert.doesNotMatch(session.primaryRootCause.cause, /transcoded and streamed smoothly/);
+    assert.doesNotMatch(session.aiBriefing, /completed without any disruptions|confirm that streams opened and closed cleanly/);
+    assert.match(session.aiBriefing, /does not establish natural track completion/);
+  });
+
+  it('does not diagnose buffer starvation from a response-after-disconnect observation', () => {
+    const matches = new KnowledgeBase().evaluate('Response completed after client disconnected', 'emby');
+    const observation = matches.find(match => match.ruleId === 'AUDIO_TRANSFER_BUFFER_STARVATION');
+    assert.ok(observation);
+    assert.equal(observation.severity, 'Info');
+    assert.doesNotMatch(observation.rootCause, /causing playback buffer exhaustion/);
+    assert.doesNotMatch(observation.explanation, /19MB|75,000|throttling/);
+  });
+
+  it('distinguishes Android app versions from explicitly labelled client OS context', () => {
+    const CodedChecksEngine = require('../src/engine/analyzer/coded-checks');
+    const findings = [];
+    CodedChecksEngine.checkAndroidOs({
+      clientDevice: 'Emby for Android 3.4 (Phone)',
+      events: [{ details: 'Playback started on AndroidTv 2.1.55g' }]
+    }, {}, findings);
+    assert.equal(findings.length, 0);
+    CodedChecksEngine.checkAndroidOs({
+      clientDevice: 'Phone', events: [{ details: 'Client OS: Android 8.1' }]
+    }, {}, findings);
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].severity, 'Info');
+    assert.doesNotMatch(findings[0].rootCause, /lacks|failure|codec/);
+  });
+
 });

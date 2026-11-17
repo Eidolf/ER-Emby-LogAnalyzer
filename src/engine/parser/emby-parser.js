@@ -46,7 +46,8 @@ class EmbyParser {
 
     const context = {
       userByDeviceId: new Map(),
-      lastSeenUser: null
+      lastSeenUser: null,
+      unassignedPlaybackEvents: []
     };
 
     let lineIndex = 0;
@@ -99,6 +100,7 @@ class EmbyParser {
           level,
           component,
           message,
+          lineNumber: lineIndex,
           raw: line
         };
 
@@ -125,6 +127,7 @@ class EmbyParser {
       sessions: Array.from(sessions.values()),
       errors,
       transcodeInvocations,
+      unassignedPlaybackEvents: context.unassignedPlaybackEvents,
       serverVersion,
       operatingSystem,
       osKernel,
@@ -279,14 +282,16 @@ class EmbyParser {
     const playMatch1 = msg.match(/User\s+(.+?)\s+is playing\s+(.+?)\s+on\s+([^.]+)\.?/i);
     const playMatch2 = msg.match(/Playback start reported by app\s+(.+?)\s+on\s+(.+?)\s+playing\s+(.+?)\.\s+Position:.*?PlaySessionId:\s*([a-zA-Z0-9_-]+)/i);
 
-    const playSessionMatch = msg.match(/PlaySessionId[=:\s]+([a-zA-Z0-9_-]+)/i);
-    const sessionIdMatch = msg.match(/SessionId[=:\s]+([a-zA-Z0-9_-]+)/i);
+    const playSessionMatch = msg.match(/\bPlaySessionId[=:\s]+([a-zA-Z0-9_-]+)/i);
+    const sessionIdMatch = msg.match(/\bSessionId[=:\s]+([a-zA-Z0-9_-]+)/i);
     const mediaSourceMatch = msg.match(/MediaSourceId[=:\s]+([a-zA-Z0-9_-]+)/i);
     const playMethodMatch = msg.match(/PlayMethod[=:\s]+([A-Za-z]+)/i);
 
     let sessionKey = null;
     if (playSessionMatch) sessionKey = playSessionMatch[1];
     else if (sessionIdMatch) sessionKey = sessionIdMatch[1];
+    const association = playSessionMatch ? 'explicit PlaySessionId'
+      : 'session context (not an exact playback ID)';
 
     const currentConn = connectionInfo || (deviceId && context && context.userByDeviceId.has(deviceId) ? context.userByDeviceId.get(deviceId).connectionInfo : null) || (context ? context.lastSeenConnection : null);
 
@@ -304,7 +309,11 @@ class EmbyParser {
           user,
           mediaItem: item,
           clientDevice: device,
-          playMethod: playMethodMatch ? playMethodMatch[1] : 'DirectPlay',
+          clientApplication: null,
+          deviceId,
+          mediaSourceId: mediaSourceMatch ? mediaSourceMatch[1] : null,
+          reportedPlayMethod: playMethodMatch ? playMethodMatch[1] : null,
+          playMethod: playMethodMatch ? playMethodMatch[1] : 'Unknown',
           startTime: entry.timestamp,
           stopTime: null,
           status: 'Active',
@@ -321,6 +330,9 @@ class EmbyParser {
       s.events.push({
         timestamp: entry.timestamp,
         type: 'PLAYBACK_START',
+        positionMs: EmbyParser.positionMs(msg),
+        association,
+        lineNumber: entry.lineNumber,
         details: `User ${user} started playing "${item}" on ${device}${s.connection ? ` [${s.connection.protocol} via ${s.connection.route}: ${s.connection.ip}]` : ''}`
       });
     } else if (playMatch2) {
@@ -339,7 +351,11 @@ class EmbyParser {
           user: resolvedUser,
           mediaItem: item,
           clientDevice: `${appName} (${device})`,
-          playMethod: playMethodMatch ? playMethodMatch[1] : 'DirectPlay',
+          clientApplication: appName,
+          deviceId,
+          mediaSourceId: mediaSourceMatch ? mediaSourceMatch[1] : null,
+          reportedPlayMethod: playMethodMatch ? playMethodMatch[1] : null,
+          playMethod: playMethodMatch ? playMethodMatch[1] : 'Unknown',
           startTime: entry.timestamp,
           stopTime: null,
           status: 'Active',
@@ -359,6 +375,9 @@ class EmbyParser {
       s.events.push({
         timestamp: entry.timestamp,
         type: 'PLAYBACK_START',
+        positionMs: EmbyParser.positionMs(msg),
+        association,
+        lineNumber: entry.lineNumber,
         details: `Playback started for "${item}" on ${device} (${appName})${s.connection ? ` [${s.connection.protocol} via ${s.connection.route}: ${s.connection.ip}]` : ''}`
       });
     }
@@ -405,17 +424,7 @@ class EmbyParser {
 
     // Playback progress (Pause, Unpause, Volume, Seek, Buffer)
     if (msg.includes('Playback progress')) {
-      let targetSession = null;
-      if (sessionKey && sessionsMap.has(sessionKey)) {
-        targetSession = sessionsMap.get(sessionKey);
-      } else {
-        for (const [key, s] of sessionsMap.entries()) {
-          if (s.playSessionId && msg.includes(s.playSessionId)) {
-            targetSession = s;
-            break;
-          }
-        }
-      }
+      const targetSession = EmbyParser.resolvePlaybackSession(msg, sessionsMap);
 
       if (targetSession) {
         let pType = 'PLAYBACK_PROGRESS';
@@ -428,69 +437,84 @@ class EmbyParser {
           targetSession.events.push({
             timestamp: entry.timestamp,
             type: pType,
-            details: msg
+            details: msg,
+            positionMs: EmbyParser.positionMs(msg),
+            association,
+            lineNumber: entry.lineNumber
           });
         }
+      } else if (context && !msg.includes('(VolumeChange)')) {
+        context.unassignedPlaybackEvents.push({
+          timestamp: entry.timestamp,
+          type: 'PLAYBACK_PROGRESS',
+          details: msg,
+          positionMs: EmbyParser.positionMs(msg),
+          association: 'unassigned',
+          lineNumber: entry.lineNumber
+        });
       }
     }
 
-    // Audio stream transfer duration warning (e.g. download took > 10 seconds indicating buffer starvation)
-    if (msg.includes('/emby/Audio/') && msg.includes('Response 200') && msg.includes('Time: ')) {
-      const timeMatch = msg.match(/Time:\s*(\d+)ms/i);
-      if (timeMatch) {
-        const ms = parseInt(timeMatch[1], 10);
-        if (ms > 5000) {
-          const pMatch = msg.match(/PlaySessionId[=:\s]+([a-zA-Z0-9_-]+)/i);
-          let targetSession = null;
-          if (pMatch && sessionsMap.has(pMatch[1])) {
-            targetSession = sessionsMap.get(pMatch[1]);
-          } else {
-            const allS = Array.from(sessionsMap.values());
-            targetSession = allS[allS.length - 1];
-          }
-
-          if (targetSession) {
-            targetSession.events.push({
-              timestamp: entry.timestamp,
-              type: 'AUDIO_BUFFER_LATENCY',
-              details: `High audio transfer latency: FLAC/audio download took ${(ms / 1000).toFixed(1)}s (${ms}ms) from server to client. May cause playback stall/buffering.`
-            });
-          }
-        }
-      }
+    // Transfer duration is not startup latency or evidence of buffer starvation.
+    if (/\/(?:emby\/)?Audio\//i.test(msg) && /\bResponse\s+\d{3}\b/i.test(msg)) {
+      const timeMatch = msg.match(/Time:\s*(\d+(?:\.\d+)?)\s*ms/i);
+      const ms = timeMatch ? Number(timeMatch[1]) : null;
+      const httpStatus = Number(msg.match(/\bResponse\s+(\d{3})\b/i)[1]);
+      const targetSession = EmbyParser.resolvePlaybackSession(msg, sessionsMap, false);
+      const event = {
+        timestamp: entry.timestamp,
+        type: 'AUDIO_HTTP_RESPONSE',
+        details: `Audio HTTP response ${httpStatus}; request duration ${ms === null ? 'not reported' : `${ms}ms`}. This does not establish startup latency, buffer starvation or successful playback.`,
+        httpStatus,
+        association: targetSession ? association : 'unassigned',
+        durationMs: ms,
+        lineNumber: entry.lineNumber
+      };
+      if (targetSession) targetSession.events.push(event);
+      else if (context) context.unassignedPlaybackEvents.push(event);
     }
 
     // Playback stop / Session ended / Network Disconnect / Errors
     if (lower.includes('playback stopped') || (lower.includes('session') && lower.includes('has ended')) || lower.includes('connection reset') || lower.includes('client disconnected')) {
-      let targetSession = null;
-      if (sessionKey && sessionsMap.has(sessionKey)) {
-        targetSession = sessionsMap.get(sessionKey);
-      } else {
-        // Try to match by user name or session id token
-        for (const [key, s] of sessionsMap.entries()) {
-          if ((s.sessionId && msg.includes(s.sessionId)) || (s.playSessionId && msg.includes(s.playSessionId)) || (s.user && msg.includes(s.user))) {
-            targetSession = s;
-            break;
-          }
-        }
-        // Fallback to most recent session if exactly 1 active
-        if (!targetSession && sessionsMap.size === 1) {
-          targetSession = Array.from(sessionsMap.values())[0];
-        }
-      }
-
+      const targetSession = EmbyParser.resolvePlaybackSession(msg, sessionsMap);
+      const event = {
+        timestamp: entry.timestamp,
+        type: lower.includes('connection reset') || lower.includes('disconnected') ? 'NETWORK_EVENT'
+          : lower.includes('has ended') ? 'SESSION_ENDED' : 'PLAYBACK_STOP',
+        details: msg,
+        positionMs: EmbyParser.positionMs(msg),
+        association: targetSession ? association : 'unassigned',
+        lineNumber: entry.lineNumber
+      };
       if (targetSession) {
         if (lower.includes('playback stopped') || lower.includes('has ended')) {
           targetSession.stopTime = entry.timestamp;
           targetSession.status = 'Stopped';
         }
-        targetSession.events.push({
-          timestamp: entry.timestamp,
-          type: lower.includes('connection reset') || lower.includes('disconnected') ? 'NETWORK_EVENT' : 'PLAYBACK_STOP',
-          details: msg
-        });
-      }
+        targetSession.events.push(event);
+      } else if (context) context.unassignedPlaybackEvents.push(event);
     }
+  }
+
+  static resolvePlaybackSession(message, sessionsMap, allowSingleActive = true) {
+    const sessions = Array.from(sessionsMap.values());
+    const playId = message.match(/\bPlaySessionId[=:\s]+([a-zA-Z0-9_-]+)/i)?.[1];
+    if (playId) return sessions.find(session => session.playSessionId === playId) || null;
+    const sessionId = message.match(/\bSessionId[=:\s]+([a-zA-Z0-9_-]+)/i)?.[1]
+      || message.match(/\bSession\s+([a-zA-Z0-9_-]+)\s+has ended/i)?.[1];
+    const candidates = sessionId ? sessions.filter(session => session.sessionId === sessionId) : sessions;
+    if (!sessionId && !allowSingleActive) return null;
+    const active = candidates.filter(session => session.status === 'Active');
+    if (active.length === 1) return active[0];
+    return candidates.length === 1 ? candidates[0] : null;
+  }
+
+  static positionMs(message) {
+    const match = message.match(/\bPosition:\s*(\d+(?:\.\d+)?)\s*(ms|s|ticks)\b/i);
+    if (!match) return null;
+    const value = Number(match[1]);
+    const unit = match[2].toLowerCase();
+    return unit === 's' ? value * 1000 : unit === 'ticks' ? value / 10000 : value;
   }
 
   static extractInputPath(cmd) {
