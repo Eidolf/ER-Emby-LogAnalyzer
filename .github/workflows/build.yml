@@ -95,6 +95,7 @@ jobs:
 
   release:
     name: Publish Release Artifacts
+    if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/')
     needs: build
     runs-on: ubuntu-latest
     steps:
